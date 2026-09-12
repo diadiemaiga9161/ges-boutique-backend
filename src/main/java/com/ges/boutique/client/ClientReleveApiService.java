@@ -131,8 +131,9 @@ public class ClientReleveApiService {
         // situation client affichait ces paiements éclatés en plusieurs petites lignes
         // séparées au lieu d'UNE ligne correspondant à ce que le client a réellement fait
         // (ex: "1 000 000 F versé aujourd'hui" au lieu de 3 lignes de 400/350/250 000 F).
-        // Un versement simple (referenceGroupe absent) reste une ligne à lui seul, inchangé.
+        // Un versement simple (referenceGroupe absent) reste une ligne à lui seul à ce stade.
         Map<String, List<OperationCaisse>> reglementsParGroupe = new LinkedHashMap<>();
+        List<Mouvement> versementsUnitaires = new ArrayList<>();
         for (OperationCaisse op : reglements) {
             String groupe = op.getReferenceGroupe();
             if (groupe != null && !groupe.isBlank()) {
@@ -143,7 +144,7 @@ public class ClientReleveApiService {
                 m.type = "VERSEMENT";
                 m.reglements = List.of(op);
                 m.montantVerse = op.getMontant() != null ? op.getMontant() : 0.0;
-                mouvements.add(m);
+                versementsUnitaires.add(m);
             }
         }
         for (List<OperationCaisse> ops : reglementsParGroupe.values()) {
@@ -156,8 +157,16 @@ public class ClientReleveApiService {
             m.type = "VERSEMENT";
             m.reglements = ops;
             m.montantVerse = ops.stream().mapToDouble(o -> o.getMontant() != null ? o.getMontant() : 0.0).sum();
-            mouvements.add(m);
+            versementsUnitaires.add(m);
         }
+
+        // NOTE : le regroupement des versements par JOUR CALENDAIRE (plusieurs paiements le
+        // même jour -> une seule ligne) est déjà géré côté Angular (grouperLignesParDate,
+        // clients.component.ts) — pas besoin de le refaire ici, ce qui doublonnerait cette
+        // logique. Chaque versement unitaire (paiement simple ou paiement groupé multi-crédits)
+        // reste donc un Mouvement à ce stade ; seul le LIBELLÉ d'un paiement groupé
+        // multi-crédits est amélioré dans ligneVersement() (cf plus bas).
+        mouvements.addAll(versementsUnitaires);
 
         for (RetourVente r : retours) {
             Mouvement m = new Mouvement();
@@ -306,16 +315,18 @@ public class ClientReleveApiService {
             dto.setReferenceReglement("REG-" + premier.getId());
             dto.setVenteId(premier.getVente() != null ? premier.getVente().getId() : premier.getVenteCreditId());
         } else {
-            // Paiement groupé consolidé : pas UNE vente précise à rattacher à cette ligne
-            // (plusieurs crédits différents réglés d'un coup) -> on liste les numéros de
-            // vente concernés dans referenceVente pour garder cette info visible.
-            String numeros = ops.stream()
-                    .map(o -> o.getVente() != null ? o.getVente().getNumeroVente() : null)
+            // Paiement groupé consolidé (plusieurs crédits différents réglés d'un coup, ou
+            // plusieurs versements de la même journée fusionnés) : pas UNE vente précise à
+            // rattacher à cette ligne. BUG FIX (Situation client illisible) : on affichait
+            // avant TOUS les numéros de vente concernés dans referenceVente (parfois des
+            // dizaines de "VT-..." dans une seule cellule) — remplacé par un libellé court.
+            long nbVentes = ops.stream()
+                    .map(o -> o.getVente() != null ? o.getVente().getId() : o.getVenteCreditId())
                     .filter(java.util.Objects::nonNull)
                     .distinct()
-                    .collect(Collectors.joining(", "));
-            dto.setReferenceVente(numeros.isEmpty() ? null : numeros);
-            dto.setReferenceReglement("REG-GROUPE-" + ops.size() + "-credits");
+                    .count();
+            dto.setReferenceVente(null);
+            dto.setReferenceReglement("Paiement groupé — " + nbVentes + (nbVentes > 1 ? " ventes réglées" : " vente réglée"));
             dto.setVenteId(null);
         }
 

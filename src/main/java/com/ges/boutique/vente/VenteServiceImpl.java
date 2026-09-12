@@ -262,6 +262,15 @@ public class VenteServiceImpl implements VenteService {
     }
 
     @Override
+    public List<Vente> obtenirVentesParClientId(Long clientId) {
+        // BUG FIX (page "Ventes du client" Angular) : le front chargeait auparavant TOUTES
+        // les ventes de la boutique via /api/ventes puis filtrait côté JS par client — lent
+        // sur une boutique avec beaucoup d'historique. findByClientId filtre déjà côté
+        // serveur (comptant + crédit, non annulées, triées par date desc).
+        return venteRepository.findByClientId(clientId);
+    }
+
+    @Override
     public List<Vente> obtenirVentesParVendeur(Long vendeurId) {
         return venteRepository.findByVendeurId(vendeurId).stream()
                 .filter(v -> !Boolean.TRUE.equals(v.getAnnulee()))
