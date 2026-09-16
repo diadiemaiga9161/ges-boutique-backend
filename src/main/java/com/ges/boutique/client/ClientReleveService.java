@@ -2,12 +2,10 @@ package com.ges.boutique.client;
 
 import com.ges.boutique.boutique.Boutique;
 import com.ges.boutique.boutique.BoutiqueRepository;
-import com.ges.boutique.vente.LigneVente;
 import com.ges.boutique.vente.Vente;
 import com.ges.boutique.vente.VenteRepository;
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
-import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.*;
 import com.lowagie.text.pdf.draw.LineSeparator;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +19,17 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * PDF "Situation client" (GET /api/clients/{id}/releve-pdf), ouvert par Ionic et React Native.
+ *
+ * Les montants et les lignes viennent de {@link ClientReleveApiService} — la même source que
+ * l'écran Situation client des 3 fronts — pour que le PDF affiche exactement la même chose :
+ * chaque achat avec ses produits, chaque versement, et un paiement groupé sur une seule ligne
+ * avec les ventes qu'il a réglées.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,7 @@ public class ClientReleveService {
     private final VenteRepository venteRepository;
     private final ClientRepository clientRepository;
     private final BoutiqueRepository boutiqueRepository;
+    private final ClientReleveApiService clientReleveApiService;
 
     private static final Color BLEU_PRIMAIRE = new Color(30, 80, 162);
     private static final Color BLEU_CLAIR = new Color(219, 234, 254);
@@ -39,12 +47,27 @@ public class ClientReleveService {
     private static final Color ROUGE_RETARD = new Color(220, 38, 38);
     private static final Color GRIS_CLAIR = new Color(248, 250, 252);
     private static final Color GRIS_TEXTE = new Color(71, 85, 105);
+    private static final Color GRIS_BORDURE = new Color(226, 232, 240);
+    private static final Color TEXTE = new Color(30, 30, 30);
+    private static final Color FOND_VENTE = new Color(255, 251, 235);
+    private static final Color FOND_VERSEMENT = new Color(240, 253, 244);
+    private static final Color FOND_RETOUR = new Color(239, 246, 255);
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FMT_LONG = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     public byte[] genererReleve(Long clientId) {
+        return genererReleve(clientId, null, null, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    public byte[] genererReleve(Long clientId, LocalDate dateDebut, LocalDate dateFin, String type) {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client introuvable"));
+
+        // Toutes les lignes de la période en une seule page (le PDF n'est pas paginé).
+        Map<String, Object> situation = clientReleveApiService.genererReleve(
+                clientId, 0, Integer.MAX_VALUE, dateDebut, dateFin, type);
+        List<ClientReleveLigneDto> lignes = (List<ClientReleveLigneDto>) situation.get("lignes");
 
         List<Vente> ventes = venteRepository.findByClientId(clientId);
         if (ventes.isEmpty()) {
@@ -58,35 +81,29 @@ public class ClientReleveService {
 
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.A4, 36, 36, 48, 48);
+            // Paysage : 10 colonnes (même tableau que la Situation client à l'écran).
+            Document doc = new Document(PageSize.A4.rotate(), 30, 30, 36, 36);
             PdfWriter writer = PdfWriter.getInstance(doc, out);
             doc.open();
 
-            ajouterEnTete(doc, writer, boutique, client);
-            ajouterResume(doc, ventes, client);
-            ajouterVentes(doc, ventes);
+            ajouterEnTete(doc, writer, boutique, client, libellePeriode(dateDebut, dateFin, type));
+            ajouterResume(doc, situation);
+            ajouterSituation(doc, lignes);
             ajouterCreditsEnCours(doc, ventes);
             ajouterPied(doc, boutique);
 
             doc.close();
             return out.toByteArray();
         } catch (Exception e) {
-            log.error("Erreur génération relevé PDF client {}: {}", clientId, e.getMessage());
+            log.error("Erreur génération situation PDF client {}: {}", clientId, e.getMessage());
             throw new RuntimeException("Erreur génération PDF", e);
         }
     }
 
-    private void ajouterEnTete(Document doc, PdfWriter writer, Boutique boutique, Client client) throws DocumentException {
-        // Bandeau bleu en-tête
-        PdfContentByte canvas = writer.getDirectContentUnder();
-        canvas.setColorFill(BLEU_PRIMAIRE);
-        canvas.rectangle(36, doc.top() - 80, doc.right() - 36, 80);
-        canvas.fill();
-
-        // Nom boutique
+    private void ajouterEnTete(Document doc, PdfWriter writer, Boutique boutique, Client client, String periode) throws DocumentException {
         Font fontBoutiqueNom = new Font(Font.HELVETICA, 18, Font.BOLD, Color.WHITE);
         Font fontBoutiqueAdresse = new Font(Font.HELVETICA, 9, Font.NORMAL, new Color(200, 220, 255));
-        Font fontTitreReleve = new Font(Font.HELVETICA, 11, Font.BOLD, new Color(180, 210, 255));
+        Font fontTitreReleve = new Font(Font.HELVETICA, 12, Font.BOLD, new Color(180, 210, 255));
 
         PdfPTable header = new PdfPTable(2);
         header.setWidthPercentage(100);
@@ -96,30 +113,33 @@ public class ClientReleveService {
         cellGauche.setBorder(0);
         cellGauche.setBackgroundColor(BLEU_PRIMAIRE);
         cellGauche.setPadding(10);
-        Paragraph nomBoutique = new Paragraph(boutique.getNom(), fontBoutiqueNom);
-        cellGauche.addElement(nomBoutique);
-        cellGauche.addElement(new Paragraph(boutique.getAdresse() + " — " + boutique.getTelephone(), fontBoutiqueAdresse));
+        cellGauche.addElement(new Paragraph(texte(boutique.getNom()), fontBoutiqueNom));
+        cellGauche.addElement(new Paragraph(texte(boutique.getAdresse()) + " — " + texte(boutique.getTelephone()), fontBoutiqueAdresse));
 
         PdfPCell cellDroite = new PdfPCell();
         cellDroite.setBorder(0);
         cellDroite.setBackgroundColor(BLEU_PRIMAIRE);
         cellDroite.setPadding(10);
-        cellDroite.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        cellDroite.addElement(new Paragraph("RELEVÉ CLIENT", fontTitreReleve));
+        Paragraph titre = new Paragraph("SITUATION CLIENT", fontTitreReleve);
+        titre.setAlignment(Element.ALIGN_RIGHT);
+        cellDroite.addElement(titre);
         Font fontDate = new Font(Font.HELVETICA, 9, Font.NORMAL, Color.WHITE);
-        cellDroite.addElement(new Paragraph("Édité le " + LocalDate.now().format(FMT), fontDate));
+        Paragraph edite = new Paragraph("Édité le " + LocalDate.now().format(FMT), fontDate);
+        edite.setAlignment(Element.ALIGN_RIGHT);
+        cellDroite.addElement(edite);
+        Paragraph pPeriode = new Paragraph(periode, fontDate);
+        pPeriode.setAlignment(Element.ALIGN_RIGHT);
+        cellDroite.addElement(pPeriode);
 
         header.addCell(cellGauche);
         header.addCell(cellDroite);
         doc.add(header);
 
-        doc.add(new Paragraph(" "));
-
         // Infos client
         PdfPTable infoClient = new PdfPTable(2);
         infoClient.setWidthPercentage(100);
         infoClient.setWidths(new float[]{1f, 1f});
-        infoClient.setSpacingBefore(8);
+        infoClient.setSpacingBefore(10);
 
         Font fontLabel = new Font(Font.HELVETICA, 8, Font.BOLD, GRIS_TEXTE);
         Font fontValeur = new Font(Font.HELVETICA, 10, Font.BOLD, new Color(15, 23, 42));
@@ -130,140 +150,134 @@ public class ClientReleveService {
         cellClient.setBorderWidth(1.5f);
         cellClient.setBackgroundColor(GRIS_CLAIR);
         cellClient.setPadding(10);
-        String nomAffiche = (client.getNom() + " " + client.getPrenom()).trim();
+        String nomAffiche = (texte(client.getNom()) + " " + texte(client.getPrenom())).trim();
         cellClient.addElement(new Paragraph("CLIENT", fontLabel));
         cellClient.addElement(new Paragraph(nomAffiche, fontValeur));
-        if (client.getNumeroTelephone() != null)
-            cellClient.addElement(new Paragraph("📱 " + client.getNumeroTelephone(), fontValeurNormal));
-        if (client.getEmail() != null)
-            cellClient.addElement(new Paragraph("✉ " + client.getEmail(), fontValeurNormal));
-        if (client.getAdresse() != null)
-            cellClient.addElement(new Paragraph("📍 " + client.getAdresse(), fontValeurNormal));
+        String contact = java.util.stream.Stream.of(client.getNumeroTelephone(), client.getEmail(), client.getAdresse())
+                .filter(s -> s != null && !s.isBlank())
+                .collect(Collectors.joining("  ·  "));
+        if (!contact.isEmpty()) cellClient.addElement(new Paragraph(contact, fontValeurNormal));
 
         PdfPCell cellDateClient = new PdfPCell();
         cellDateClient.setBorderColor(BLEU_CLAIR);
         cellDateClient.setBorderWidth(1.5f);
         cellDateClient.setBackgroundColor(GRIS_CLAIR);
         cellDateClient.setPadding(10);
-        cellDateClient.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        cellDateClient.addElement(new Paragraph("MEMBRE DEPUIS", fontLabel));
-        if (client.getDateCreation() != null)
-            cellDateClient.addElement(new Paragraph(client.getDateCreation().toLocalDate().format(FMT), fontValeur));
+        Paragraph labelMembre = new Paragraph("MEMBRE DEPUIS", fontLabel);
+        labelMembre.setAlignment(Element.ALIGN_RIGHT);
+        cellDateClient.addElement(labelMembre);
+        if (client.getDateCreation() != null) {
+            Paragraph dateMembre = new Paragraph(client.getDateCreation().toLocalDate().format(FMT), fontValeur);
+            dateMembre.setAlignment(Element.ALIGN_RIGHT);
+            cellDateClient.addElement(dateMembre);
+        }
 
         infoClient.addCell(cellClient);
         infoClient.addCell(cellDateClient);
         doc.add(infoClient);
-        doc.add(new Paragraph(" "));
     }
 
-    private void ajouterResume(Document doc, List<Vente> ventes, Client client) throws DocumentException {
-        double totalAchats = ventes.stream().mapToDouble(v -> v.getMontantTotal() != null ? v.getMontantTotal() : 0).sum();
-        long nbVentes = ventes.size();
-        List<Vente> creditsEnCours = ventes.stream()
-                .filter(v -> Boolean.TRUE.equals(v.getEstCredit()) && !Boolean.TRUE.equals(v.getCreditRegle()))
-                .collect(Collectors.toList());
-        double totalCreditsRestants = creditsEnCours.stream()
-                .mapToDouble(v -> v.getMontantRestant() != null ? v.getMontantRestant() : 0).sum();
-
-        Font fontTitre = new Font(Font.HELVETICA, 11, Font.BOLD, BLEU_PRIMAIRE);
-        doc.add(new Paragraph("RÉSUMÉ DU COMPTE", fontTitre));
-        doc.add(new Paragraph(" "));
+    private void ajouterResume(Document doc, Map<String, Object> situation) throws DocumentException {
+        double totalVentes = nombre(situation.get("totalVentes"));
+        double totalVersements = nombre(situation.get("totalVersements"));
+        double soldeActuel = nombre(situation.get("soldeActuel"));
 
         PdfPTable resume = new PdfPTable(3);
         resume.setWidthPercentage(100);
-        resume.setSpacingBefore(4);
+        resume.setSpacingBefore(10);
+        resume.setSpacingAfter(12);
 
-        addResumeCard(resume, "Total achats", formatMontant(totalAchats), BLEU_PRIMAIRE, Color.WHITE);
-        addResumeCard(resume, "Nb. ventes", String.valueOf(nbVentes), new Color(15, 118, 110), Color.WHITE);
-        addResumeCard(resume, "Crédits en cours", formatMontant(totalCreditsRestants),
-                creditsEnCours.isEmpty() ? new Color(71, 85, 105) : ORANGE_CREDIT, Color.WHITE);
-
+        addResumeCard(resume, "Total des achats", formatMontant(totalVentes), BLEU_PRIMAIRE);
+        addResumeCard(resume, "Total des versements", formatMontant(totalVersements), VERT_REGLE);
+        addResumeCard(resume, "Reste à payer", formatMontant(soldeActuel),
+                soldeActuel > 0 ? ROUGE_RETARD : GRIS_TEXTE);
         doc.add(resume);
-        doc.add(new Paragraph(" "));
     }
 
-    private void addResumeCard(PdfPTable table, String label, String valeur, Color bg, Color textColor) {
+    private void addResumeCard(PdfPTable table, String label, String valeur, Color bg) {
         PdfPCell cell = new PdfPCell();
         cell.setBackgroundColor(bg);
-        cell.setPadding(12);
-        cell.setBorder(0);
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        Font fontLabel = new Font(Font.HELVETICA, 8, Font.NORMAL, new Color(200, 220, 255));
-        Font fontValeur = new Font(Font.HELVETICA, 13, Font.BOLD, textColor);
-        cell.addElement(new Paragraph(label, fontLabel));
-        Paragraph p = new Paragraph(valeur, fontValeur);
+        cell.setPadding(10);
+        cell.setBorderColor(Color.WHITE);
+        cell.setBorderWidth(3);
+        Paragraph pLabel = new Paragraph(label.toUpperCase(), new Font(Font.HELVETICA, 8, Font.BOLD, new Color(235, 242, 255)));
+        pLabel.setAlignment(Element.ALIGN_CENTER);
+        cell.addElement(pLabel);
+        Paragraph p = new Paragraph(valeur, new Font(Font.HELVETICA, 14, Font.BOLD, Color.WHITE));
         p.setAlignment(Element.ALIGN_CENTER);
         cell.addElement(p);
         table.addCell(cell);
     }
 
-    private void ajouterVentes(Document doc, List<Vente> ventes) throws DocumentException {
+    private void ajouterSituation(Document doc, List<ClientReleveLigneDto> lignes) throws DocumentException {
         Font fontTitre = new Font(Font.HELVETICA, 11, Font.BOLD, BLEU_PRIMAIRE);
-        doc.add(new Paragraph("HISTORIQUE DES VENTES", fontTitre));
-        doc.add(new Paragraph(" "));
+        Paragraph titre = new Paragraph("ACHATS ET VERSEMENTS", fontTitre);
+        titre.setSpacingAfter(6);
+        doc.add(titre);
 
-        PdfPTable table = new PdfPTable(6);
+        if (lignes == null || lignes.isEmpty()) {
+            doc.add(new Paragraph("Aucune opération sur cette période.", new Font(Font.HELVETICA, 9, Font.ITALIC, GRIS_TEXTE)));
+            doc.add(new Paragraph(" "));
+            return;
+        }
+
+        PdfPTable table = new PdfPTable(10);
         table.setWidthPercentage(100);
-        table.setWidths(new float[]{1.4f, 1.2f, 1f, 2.5f, 1.2f, 1f});
+        table.setWidths(new float[]{1.15f, 0.8f, 1.55f, 3.6f, 0.45f, 0.95f, 1f, 1f, 1f, 1f});
+        table.setHeaderRows(1);
 
-        String[] headers = {"N° Vente", "Date", "Type", "Produits", "Montant", "Statut"};
+        String[] headers = {"Date", "Type", "Référence", "Désignation", "Qté", "P.U.", "Vente", "Versement", "Reste à payer", "Par"};
         for (String h : headers) {
-            PdfPCell cell = new PdfPCell(new Phrase(h, new Font(Font.HELVETICA, 8, Font.BOLD, Color.WHITE)));
+            PdfPCell cell = new PdfPCell(new Phrase(h, new Font(Font.HELVETICA, 7.5f, Font.BOLD, Color.WHITE)));
             cell.setBackgroundColor(BLEU_PRIMAIRE);
-            cell.setPadding(6);
+            cell.setBorderColor(BLEU_PRIMAIRE);
+            cell.setPadding(5);
             cell.setHorizontalAlignment(Element.ALIGN_CENTER);
             table.addCell(cell);
         }
 
-        Font fontCell = new Font(Font.HELVETICA, 8, Font.NORMAL, new Color(30, 30, 30));
-        Font fontCellBold = new Font(Font.HELVETICA, 8, Font.BOLD, new Color(30, 30, 30));
-        boolean pair = false;
+        Font fontCell = new Font(Font.HELVETICA, 7.5f, Font.NORMAL, TEXTE);
+        Font fontCellBold = new Font(Font.HELVETICA, 7.5f, Font.BOLD, TEXTE);
+        Font fontDetail = new Font(Font.HELVETICA, 7f, Font.NORMAL, GRIS_TEXTE);
 
-        for (Vente v : ventes) {
-            Color bg = pair ? Color.WHITE : GRIS_CLAIR;
-            pair = !pair;
-
-            addCell(table, v.getNumeroVente() != null ? v.getNumeroVente() : "#" + v.getId(), fontCellBold, bg, Element.ALIGN_LEFT);
-            addCell(table, v.getDateVente() != null ? v.getDateVente().format(FMT) : "-", fontCell, bg, Element.ALIGN_CENTER);
-
-            String type = Boolean.TRUE.equals(v.getEstCredit()) ? "Crédit" : "Comptant";
-            Color typeColor = Boolean.TRUE.equals(v.getEstCredit()) ? ORANGE_CREDIT : VERT_REGLE;
-            PdfPCell typeCell = new PdfPCell(new Phrase(type, new Font(Font.HELVETICA, 8, Font.BOLD, typeColor)));
-            typeCell.setBackgroundColor(bg);
-            typeCell.setPadding(5);
-            typeCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-            table.addCell(typeCell);
-
-            String produits = v.getLignes() != null
-                    ? v.getLignes().stream()
-                    .map(l -> l.getProduit() != null ? l.getProduit().getNom() + " ×" + l.getQuantite() : "")
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.joining(", "))
-                    : "-";
-            if (produits.length() > 60) produits = produits.substring(0, 57) + "...";
-            addCell(table, produits, fontCell, bg, Element.ALIGN_LEFT);
-
-            addCell(table, formatMontant(v.getMontantTotal() != null ? v.getMontantTotal() : 0), fontCellBold, bg, Element.ALIGN_RIGHT);
-
-            String statut;
-            Color statutColor;
-            if (Boolean.TRUE.equals(v.getAnnulee())) {
-                statut = "Annulée"; statutColor = GRIS_TEXTE;
-            } else if (!Boolean.TRUE.equals(v.getEstCredit())) {
-                statut = "Payé"; statutColor = VERT_REGLE;
-            } else if (Boolean.TRUE.equals(v.getCreditRegle())) {
-                statut = "Réglé"; statutColor = VERT_REGLE;
-            } else if (v.getDateEcheance() != null && v.getDateEcheance().isBefore(LocalDate.now())) {
-                statut = "Retard"; statutColor = ROUGE_RETARD;
-            } else {
-                statut = "En cours"; statutColor = ORANGE_CREDIT;
+        for (ClientReleveLigneDto l : lignes) {
+            Color bg;
+            Color couleurType;
+            String typeLabel;
+            switch (l.getType() == null ? "" : l.getType()) {
+                case "VERSEMENT" -> { bg = FOND_VERSEMENT; couleurType = VERT_REGLE; typeLabel = "Versement"; }
+                case "RETOUR" -> { bg = FOND_RETOUR; couleurType = BLEU_PRIMAIRE; typeLabel = "Retour"; }
+                default -> { bg = FOND_VENTE; couleurType = ORANGE_CREDIT; typeLabel = "Vente"; }
             }
 
-            PdfPCell statutCell = new PdfPCell(new Phrase(statut, new Font(Font.HELVETICA, 8, Font.BOLD, statutColor)));
-            statutCell.setBackgroundColor(bg);
-            statutCell.setPadding(5);
-            statutCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-            table.addCell(statutCell);
+            addCell(table, l.getDate() != null ? l.getDate().format(FMT_LONG) : "-", fontCell, bg, Element.ALIGN_LEFT);
+            addCell(table, typeLabel, new Font(Font.HELVETICA, 7.5f, Font.BOLD, couleurType), bg, Element.ALIGN_LEFT);
+            String reference = l.getReferenceVente() != null ? l.getReferenceVente() : l.getReferenceReglement();
+            addCell(table, reference != null ? reference : "-", fontCellBold, bg, Element.ALIGN_LEFT);
+
+            // Désignation : produit pour un achat ; produits payés pour un versement simple. Un paiement
+            // groupé reste une ligne courte (la Référence dit déjà "Paiement groupé — N ventes réglées") :
+            // la liste de ses ventes rendait la ligne illisible dès quelques ventes.
+            PdfPCell designation = celluleVide(bg);
+            List<ClientReleveLigneDto.VenteReglee> reglees = l.getVentesReglees();
+            if ("VERSEMENT".equals(l.getType()) && reglees != null && reglees.size() == 1) {
+                designation.addElement(paragrapheSerre(new Chunk(texteProduits(reglees.get(0)), fontDetail)));
+            } else if ("VENTE".equals(l.getType())) {
+                designation.addElement(new Paragraph(l.getProduitNom() != null ? l.getProduitNom() : "-", fontCell));
+            } else {
+                designation.addElement(new Paragraph("-", fontCell));
+            }
+            table.addCell(designation);
+
+            addCell(table, l.getQuantite() != null ? String.valueOf(l.getQuantite()) : "", fontCell, bg, Element.ALIGN_RIGHT);
+            addCell(table, l.getPrixUnitaire() != null ? formatMontant(l.getPrixUnitaire()) : "", fontCell, bg, Element.ALIGN_RIGHT);
+            addCell(table, l.getMontantVente() != null ? formatMontant(l.getMontantVente()) : "", fontCellBold, bg, Element.ALIGN_RIGHT);
+            addCell(table, l.getMontantVersement() != null ? formatMontant(l.getMontantVersement()) : "",
+                    new Font(Font.HELVETICA, 7.5f, Font.BOLD, VERT_REGLE), bg, Element.ALIGN_RIGHT);
+            Double reste = l.getResteAPayerApres();
+            addCell(table, reste != null ? formatMontant(reste) : "",
+                    new Font(Font.HELVETICA, 7.5f, Font.BOLD, reste != null && reste > 0 ? ROUGE_RETARD : TEXTE), bg, Element.ALIGN_RIGHT);
+            addCell(table, l.getUtilisateurNom() != null ? l.getUtilisateurNom() : "", fontCell, bg, Element.ALIGN_LEFT);
         }
 
         doc.add(table);
@@ -272,29 +286,33 @@ public class ClientReleveService {
 
     private void ajouterCreditsEnCours(Document doc, List<Vente> ventes) throws DocumentException {
         List<Vente> credits = ventes.stream()
-                .filter(v -> Boolean.TRUE.equals(v.getEstCredit()) && !Boolean.TRUE.equals(v.getCreditRegle()))
+                .filter(v -> Boolean.TRUE.equals(v.getEstCredit()) && !Boolean.TRUE.equals(v.getCreditRegle())
+                        && !Boolean.TRUE.equals(v.getAnnulee()))
                 .collect(Collectors.toList());
 
         if (credits.isEmpty()) return;
 
         Font fontTitre = new Font(Font.HELVETICA, 11, Font.BOLD, ORANGE_CREDIT);
-        doc.add(new Paragraph("CRÉDITS EN COURS", fontTitre));
-        doc.add(new Paragraph(" "));
+        Paragraph titre = new Paragraph("CRÉDITS EN COURS", fontTitre);
+        titre.setSpacingAfter(6);
+        doc.add(titre);
 
         PdfPTable table = new PdfPTable(5);
         table.setWidthPercentage(100);
         table.setWidths(new float[]{1.4f, 1.2f, 1.2f, 1.2f, 1.2f});
+        table.setHeaderRows(1);
 
         String[] headers = {"N° Vente", "Date vente", "Montant total", "Déjà versé", "Reste à payer"};
         for (String h : headers) {
             PdfPCell cell = new PdfPCell(new Phrase(h, new Font(Font.HELVETICA, 8, Font.BOLD, Color.WHITE)));
             cell.setBackgroundColor(ORANGE_CREDIT);
+            cell.setBorderColor(ORANGE_CREDIT);
             cell.setPadding(6);
             cell.setHorizontalAlignment(Element.ALIGN_CENTER);
             table.addCell(cell);
         }
 
-        Font fontCell = new Font(Font.HELVETICA, 9, Font.NORMAL, new Color(30, 30, 30));
+        Font fontCell = new Font(Font.HELVETICA, 9, Font.NORMAL, TEXTE);
         Font fontReste = new Font(Font.HELVETICA, 9, Font.BOLD, ROUGE_RETARD);
         boolean pair = false;
 
@@ -308,12 +326,7 @@ public class ClientReleveService {
             addCell(table, v.getDateVente() != null ? v.getDateVente().format(FMT) : "-", fontCell, bg, Element.ALIGN_CENTER);
             addCell(table, formatMontant(v.getMontantTotal() != null ? v.getMontantTotal() : 0), fontCell, bg, Element.ALIGN_RIGHT);
             addCell(table, formatMontant(v.getMontantVerse() != null ? v.getMontantVerse() : 0), fontCell, bg, Element.ALIGN_RIGHT);
-
-            PdfPCell resteCell = new PdfPCell(new Phrase(formatMontant(reste), fontReste));
-            resteCell.setBackgroundColor(bg);
-            resteCell.setPadding(5);
-            resteCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-            table.addCell(resteCell);
+            addCell(table, formatMontant(reste), fontReste, bg, Element.ALIGN_RIGHT);
         }
 
         doc.add(table);
@@ -322,22 +335,77 @@ public class ClientReleveService {
 
     private void ajouterPied(Document doc, Boutique boutique) throws DocumentException {
         Font fontPied = new Font(Font.HELVETICA, 8, Font.ITALIC, GRIS_TEXTE);
-        Paragraph pied = new Paragraph("Document généré par " + boutique.getNom() +
-                " — " + boutique.getTelephone() + " — " + LocalDate.now().format(FMT), fontPied);
+        Paragraph pied = new Paragraph("Document généré par " + texte(boutique.getNom()) +
+                " — " + texte(boutique.getTelephone()) + " — " + LocalDate.now().format(FMT), fontPied);
         pied.setAlignment(Element.ALIGN_CENTER);
         doc.add(new LineSeparator());
         doc.add(pied);
     }
 
+    // ==================== HELPERS ====================
+
+    private String libellePeriode(LocalDate dateDebut, LocalDate dateFin, String type) {
+        String periode;
+        if (dateDebut != null && dateFin != null) {
+            periode = dateDebut.equals(dateFin)
+                    ? "Journée du " + dateDebut.format(FMT)
+                    : "Du " + dateDebut.format(FMT) + " au " + dateFin.format(FMT);
+        } else if (dateDebut != null) {
+            periode = "Depuis le " + dateDebut.format(FMT);
+        } else if (dateFin != null) {
+            periode = "Jusqu'au " + dateFin.format(FMT);
+        } else {
+            periode = "Tout l'historique";
+        }
+        if ("VENTE".equalsIgnoreCase(type)) periode += " — achats uniquement";
+        else if ("VERSEMENT".equalsIgnoreCase(type)) periode += " — versements uniquement";
+        return periode;
+    }
+
+    private String texteProduits(ClientReleveLigneDto.VenteReglee vr) {
+        if (vr.getProduits() == null || vr.getProduits().isEmpty()) return "-";
+        return vr.getProduits().stream()
+                .map(p -> texte(p.getProduitNom()) + (p.getQuantite() != null ? " ×" + p.getQuantite() : ""))
+                .collect(Collectors.joining(", "));
+    }
+
+    /** Paragraphe à interligne serré (l'interligne par défaut d'une cellule est trop aéré en 7 pt). */
+    private Paragraph paragrapheSerre(Chunk debut) {
+        Paragraph p = new Paragraph();
+        p.setLeading(0, 1.25f);
+        p.add(debut);
+        return p;
+    }
+
+    private PdfPCell celluleVide(Color bg) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBackgroundColor(bg);
+        cell.setBorderColor(GRIS_BORDURE);
+        cell.setPadding(4);
+        cell.setPaddingTop(1);
+        return cell;
+    }
+
     private void addCell(PdfPTable table, String text, Font font, Color bg, int align) {
         PdfPCell cell = new PdfPCell(new Phrase(text != null ? text : "", font));
         cell.setBackgroundColor(bg);
-        cell.setPadding(5);
+        cell.setBorderColor(GRIS_BORDURE);
+        cell.setPadding(4);
         cell.setHorizontalAlignment(align);
         table.addCell(cell);
     }
 
+    private static String texte(String valeur) {
+        return valeur != null ? valeur : "";
+    }
+
+    private static double nombre(Object valeur) {
+        return valeur instanceof Number n ? n.doubleValue() : 0.0;
+    }
+
     private String formatMontant(double montant) {
-        return NumberFormat.getNumberInstance(Locale.FRANCE).format((long) montant) + " F";
+        // Espaces insécables fines (U+202F) absentes des polices standard du PDF : espace simple.
+        return NumberFormat.getNumberInstance(Locale.FRANCE).format(Math.round(montant))
+                .replace(' ', ' ').replace(' ', ' ') + " F";
     }
 }

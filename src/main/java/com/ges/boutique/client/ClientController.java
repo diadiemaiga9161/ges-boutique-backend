@@ -155,9 +155,13 @@ public class ClientController {
     }
 
     @GetMapping("/{id}/releve-pdf")
-    public ResponseEntity<byte[]> telechargerReleve(@PathVariable Long id) {
+    public ResponseEntity<byte[]> telechargerReleve(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(required = false) String type) {
         try {
-            byte[] pdf = clientReleveService.genererReleve(id);
+            byte[] pdf = clientReleveService.genererReleve(id, dateDebut, dateFin, type);
             Client client = clientService.trouverParId(id)
                     .orElseThrow(() -> new RuntimeException("Client introuvable"));
             String nomComplet = (client.getNom() + " " + client.getPrenom()).trim();

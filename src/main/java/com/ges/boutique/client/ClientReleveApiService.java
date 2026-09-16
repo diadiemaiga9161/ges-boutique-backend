@@ -27,9 +27,8 @@ import java.util.stream.Collectors;
 /**
  * Service JSON dédié au relevé client / "situation client" (GET /api/clients/{id}/releve).
  *
- * ATTENTION : distinct de {@link ClientReleveService} qui génère un PDF (iText) avec sa
- * propre logique de résumé simplifiée. Ne pas fusionner : formats de sortie et granularité
- * de calcul (règlements + retours mêlés chronologiquement, reliquat cumulé) trop différents.
+ * Le PDF de la situation ({@link ClientReleveService}) réutilise ce service tel quel, pour que
+ * le PDF et l'écran affichent toujours les mêmes lignes et les mêmes totaux.
  *
  * Sert de socle UNIQUE aux 3 fronts (Angular, Ionic, React Native) — le contrat JSON exposé
  * par {@link #genererReleve} ne doit pas être modifié sans coordination avec les 3 équipes front.
@@ -85,6 +84,9 @@ public class ClientReleveApiService {
         }
 
         List<Long> venteIds = ventes.stream().map(Vente::getId).collect(Collectors.toList());
+        // Sert à retrouver les produits des ventes réglées par chaque versement.
+        Map<Long, Vente> ventesParId = ventes.stream()
+                .collect(Collectors.toMap(Vente::getId, v -> v, (a, b) -> a));
 
         // Règlements de crédit (acompte initial + versements ultérieurs), déjà filtrés
         // type=REGLEMENT_CREDIT et annule=false côté requête.
@@ -160,12 +162,9 @@ public class ClientReleveApiService {
             versementsUnitaires.add(m);
         }
 
-        // NOTE : le regroupement des versements par JOUR CALENDAIRE (plusieurs paiements le
-        // même jour -> une seule ligne) est déjà géré côté Angular (grouperLignesParDate,
-        // clients.component.ts) — pas besoin de le refaire ici, ce qui doublonnerait cette
-        // logique. Chaque versement unitaire (paiement simple ou paiement groupé multi-crédits)
-        // reste donc un Mouvement à ce stade ; seul le LIBELLÉ d'un paiement groupé
-        // multi-crédits est amélioré dans ligneVersement() (cf plus bas).
+        // Pas de regroupement par jour calendaire : deux versements distincts le même jour
+        // restent deux lignes (demande utilisateur, situation client lisible opération par
+        // opération). Seul un paiement groupé (même referenceGroupe) est fusionné en une ligne.
         mouvements.addAll(versementsUnitaires);
 
         for (RetourVente r : retours) {
@@ -206,7 +205,7 @@ public class ClientReleveApiService {
         for (Mouvement m : mouvements) {
             switch (m.type) {
                 case "VENTE" -> toutesLesLignes.addAll(eclaterVente(m));
-                case "VERSEMENT" -> toutesLesLignes.add(ligneVersement(m));
+                case "VERSEMENT" -> toutesLesLignes.add(ligneVersement(m, ventesParId));
                 case "RETOUR" -> toutesLesLignes.add(ligneRetour(m));
                 default -> { /* rien */ }
             }
@@ -303,12 +302,13 @@ public class ClientReleveApiService {
         return dto;
     }
 
-    private ClientReleveLigneDto ligneVersement(Mouvement m) {
+    private ClientReleveLigneDto ligneVersement(Mouvement m, Map<Long, Vente> ventesParId) {
         List<OperationCaisse> ops = m.reglements;
         OperationCaisse premier = ops.get(0);
         ClientReleveLigneDto dto = new ClientReleveLigneDto();
         dto.setDate(m.date);
         dto.setType("VERSEMENT");
+        dto.setVentesReglees(ventesReglees(ops, ventesParId));
 
         if (ops.size() == 1) {
             dto.setReferenceVente(premier.getVente() != null ? premier.getVente().getNumeroVente() : null);
@@ -335,6 +335,48 @@ public class ClientReleveApiService {
         dto.setModePaiement(premier.getModePaiement() != null ? premier.getModePaiement().toString() : null);
         dto.setUtilisateurNom(getUtilisateurCaisseNom(premier));
         return dto;
+    }
+
+    /**
+     * Ventes réglées par un versement (une seule pour un versement simple, plusieurs pour un
+     * paiement groupé), avec leurs produits et la part du versement reçue par chacune.
+     */
+    private List<ClientReleveLigneDto.VenteReglee> ventesReglees(List<OperationCaisse> ops, Map<Long, Vente> ventesParId) {
+        Map<Long, ClientReleveLigneDto.VenteReglee> parVente = new LinkedHashMap<>();
+        for (OperationCaisse op : ops) {
+            Long venteId = op.getVenteCreditId() != null ? op.getVenteCreditId()
+                    : (op.getVente() != null ? op.getVente().getId() : null);
+            if (venteId == null) continue;
+            double montant = op.getMontant() != null ? op.getMontant() : 0.0;
+            ClientReleveLigneDto.VenteReglee existante = parVente.get(venteId);
+            if (existante != null) {
+                existante.setMontantApplique(arrondir(existante.getMontantApplique() + montant));
+                continue;
+            }
+            // Vente absente de la liste du client (ex: annulée depuis) : on garde au moins
+            // le numéro et le montant, sans les produits.
+            Vente vente = ventesParId.get(venteId);
+            if (vente == null) vente = op.getVente();
+            ClientReleveLigneDto.VenteReglee vr = new ClientReleveLigneDto.VenteReglee();
+            vr.setVenteId(venteId);
+            vr.setMontantApplique(arrondir(montant));
+            vr.setProduits(new ArrayList<>());
+            if (vente != null) {
+                vr.setNumeroVente(vente.getNumeroVente());
+                vr.setDateVente(vente.getDateVente());
+                if (ventesParId.containsKey(venteId) && vente.getLignes() != null) {
+                    for (LigneVente lv : vente.getLignes()) {
+                        vr.getProduits().add(new ClientReleveLigneDto.ProduitVendu(
+                                lv.getProduitNom(), lv.getQuantite(), lv.getPrixUnitaire()));
+                    }
+                }
+            }
+            parVente.put(venteId, vr);
+        }
+        return parVente.values().stream()
+                .sorted(Comparator.comparing(ClientReleveLigneDto.VenteReglee::getDateVente,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
     }
 
     private ClientReleveLigneDto ligneRetour(Mouvement m) {
