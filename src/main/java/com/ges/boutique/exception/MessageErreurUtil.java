@@ -2,6 +2,7 @@ package com.ges.boutique.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 /**
  * Message sûr à renvoyer au client depuis un catch local de contrôleur (hors
@@ -28,7 +29,8 @@ public final class MessageErreurUtil {
                 || e instanceof ArrayIndexOutOfBoundsException
                 || e instanceof NumberFormatException
                 || e instanceof java.io.IOException
-                || e instanceof DataAccessException) {
+                || e instanceof DataAccessException
+                || e instanceof HttpMessageNotReadableException) {
             return MESSAGE_GENERIQUE;
         }
 
