@@ -1,6 +1,7 @@
 package com.ges.boutique.dette;
 
 import com.ges.boutique.exception.FonctionnaliteDesactiveeException;
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.exception.RessourceIntrouvableException;
 import com.ges.boutique.feature.CleFonctionnalite;
 import com.ges.boutique.feature.RequireFeature;
@@ -235,6 +236,7 @@ public class DetteAncienneController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("error", e.getMessage());
+        response.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
@@ -243,6 +245,7 @@ public class DetteAncienneController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("error", e.getMessage());
+        response.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
@@ -251,6 +254,7 @@ public class DetteAncienneController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("error", e.getMessage());
+        response.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
@@ -264,17 +268,22 @@ public class DetteAncienneController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("error", "Vous n'avez pas les permissions nécessaires pour effectuer cette action");
+        response.put("message", "Vous n'avez pas les permissions nécessaires pour effectuer cette action");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
     // Même piège que AccessDeniedException ci-dessus : sans handler dédié, l'exception
     // levée par @RequireFeature tombait dans handleGeneralException (500 trompeur au
-    // lieu d'un 403 clair).
+    // lieu d'un 403 clair). errorCode ajouté : Angular/Ionic/RN vérifient tous
+    // errorCode === 'FEATURE_DISABLED' pour afficher le popup dédié — sans lui, ce
+    // handler local répondait bien 403 mais le popup explicatif ne s'affichait jamais.
     @ExceptionHandler(FonctionnaliteDesactiveeException.class)
     public ResponseEntity<Map<String, Object>> handleFonctionnaliteDesactivee(FonctionnaliteDesactiveeException e) {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("error", e.getMessage());
+        response.put("message", e.getMessage());
+        response.put("errorCode", "FEATURE_DISABLED");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
@@ -282,7 +291,9 @@ public class DetteAncienneController {
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception e) {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
-        response.put("error", "Une erreur interne est survenue: " + e.getMessage());
+        String messageSur = MessageErreurUtil.messageClient(e);
+        response.put("error", "Une erreur interne est survenue: " + messageSur);
+        response.put("message", "Une erreur interne est survenue: " + messageSur);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }

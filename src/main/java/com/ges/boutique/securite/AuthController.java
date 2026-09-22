@@ -1,6 +1,7 @@
 package com.ges.boutique.securite;
 
 import com.ges.boutique.email.PasswordResetService;
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.utilisateur.AuthRequest;
 import com.ges.boutique.utilisateur.Utilisateur;
 import com.ges.boutique.utilisateur.UtilisateurService;
@@ -113,7 +114,7 @@ public class AuthController {
             passwordResetService.demanderReset(email.trim());
             return ResponseEntity.ok(Map.of("message", "Un lien de réinitialisation a été envoyé à votre adresse email"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("message", MessageErreurUtil.messageClient(e)));
         }
     }
 
@@ -132,7 +133,7 @@ public class AuthController {
             passwordResetService.reinitialiserPassword(token, password);
             return ResponseEntity.ok(Map.of("message", "Mot de passe modifié avec succès"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("message", MessageErreurUtil.messageClient(e)));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.ges.boutique.fidelite;
 
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.feature.CleFonctionnalite;
 import com.ges.boutique.feature.RequireFeature;
 import io.swagger.v3.oas.annotations.Operation;
@@ -73,7 +74,7 @@ public class FideliteController {
             return ResponseEntity.ok(resp);
         } catch (IllegalArgumentException e) {
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", MessageErreurUtil.messageClient(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

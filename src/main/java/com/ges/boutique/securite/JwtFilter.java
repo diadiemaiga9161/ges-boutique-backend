@@ -1,10 +1,13 @@
 package com.ges.boutique.securite;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,13 +18,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -90,29 +98,63 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(7);
-        final String username = jwtUtil.extractUsername(jwt);
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        try {
+            final String username = jwtUtil.extractUsername(jwt);
 
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            if (jwtUtil.validateToken(jwt, userDetails)) {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
+                if (jwtUtil.validateToken(jwt, userDetails)) {
 
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
 
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    authToken.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request)
+                    );
+
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
+        } catch (Exception e) {
+            // Token expiré/malformé/signature invalide, ou compte supprimé depuis
+            // l'émission du token : ce filtre s'exécute AVANT DispatcherServlet, donc
+            // GlobalExceptionHandler (@ControllerAdvice) ne peut pas intercepter cette
+            // exception — sans ce catch, elle remontait non gérée et le client recevait
+            // une erreur 500 brute au lieu d'un message clair. On répond nous-mêmes ici,
+            // avec le même message/format que GlobalExceptionHandler#handleJwtException,
+            // pour que le front (déjà câblé sur le 401 pour se déconnecter proprement)
+            // se comporte pareil qu'avec un token expiré détecté plus loin dans un contrôleur.
+            log.warn("Authentification par token échouée : {}", e.getMessage());
+            writeAuthErrorResponse(response, request, e instanceof ExpiredJwtException);
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void writeAuthErrorResponse(
+            HttpServletResponse response,
+            HttpServletRequest request,
+            boolean expire
+    ) throws IOException {
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
+        body.put("status", HttpServletResponse.SC_UNAUTHORIZED);
+        body.put("error", "Authentication Error");
+        body.put("message", expire ? "Token JWT expiré" : "Token JWT invalide");
+        body.put("path", request.getRequestURI());
+        body.put("errorCode", expire ? "TOKEN_EXPIRED" : "INVALID_TOKEN");
+
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }

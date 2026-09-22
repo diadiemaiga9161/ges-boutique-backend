@@ -2,6 +2,7 @@ package com.ges.boutique.facture;
 
 import com.ges.boutique.email.PdfFactureService;
 import com.ges.boutique.email.QrCodeService;
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.exception.RessourceIntrouvableException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -197,14 +198,18 @@ public class FactureController {
     @ExceptionHandler(RessourceIntrouvableException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(RessourceIntrouvableException e) {
         Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
         error.put("error", e.getMessage());
+        error.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException e) {
         Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
         error.put("error", e.getMessage());
+        error.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
@@ -212,7 +217,10 @@ public class FactureController {
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception e) {
         log.error("Erreur interne", e);
         Map<String, Object> error = new HashMap<>();
-        error.put("error", "Erreur interne : " + e.getMessage());
+        String messageSur = MessageErreurUtil.messageClient(e);
+        error.put("success", false);
+        error.put("error", "Erreur interne : " + messageSur);
+        error.put("message", "Erreur interne : " + messageSur);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 }

@@ -1,5 +1,6 @@
 package com.ges.boutique.produit;
 
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.fournisseur.Fournisseur;
 import com.ges.boutique.fournisseur.FournisseurDto;
 import com.ges.boutique.fournisseur.FournisseurRequest;
@@ -799,7 +800,7 @@ public class ProduitController {
         } catch (IOException e) {
             System.err.println("❌ Erreur IO lors de l'importation: " + e.getMessage());
             return ResponseEntity.badRequest().body(new ImportResult(0, 0, 0,
-                    List.of("Erreur lors de la lecture du fichier: " + e.getMessage()), List.of()));
+                    List.of("Erreur lors de la lecture du fichier: " + MessageErreurUtil.messageClient(e)), List.of()));
         } catch (IllegalArgumentException e) {
             System.err.println("❌ Erreur de validation: " + e.getMessage());
             return ResponseEntity.badRequest().body(new ImportResult(0, 0, 0,
@@ -808,7 +809,7 @@ public class ProduitController {
             System.err.println("❌ Erreur inattendue lors de l'importation: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.internalServerError().body(new ImportResult(0, 0, 0,
-                    List.of("Erreur lors de l'importation: " + e.getMessage()), List.of()));
+                    List.of("Erreur lors de l'importation: " + MessageErreurUtil.messageClient(e)), List.of()));
         }
     }
 

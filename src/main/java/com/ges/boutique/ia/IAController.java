@@ -1,5 +1,6 @@
 package com.ges.boutique.ia;
 
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.feature.CleFonctionnalite;
 import com.ges.boutique.feature.RequireFeature;
 import com.ges.boutique.ia.dto.AnalyseIAResult;
@@ -65,7 +66,7 @@ public class IAController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             log.error("Erreur lors de l'analyse IA", e);
-            return ResponseEntity.internalServerError().body(Map.of("erreur", e.getMessage()));
+            return ResponseEntity.internalServerError().body(Map.of("erreur", MessageErreurUtil.messageClient(e)));
         }
     }
 
@@ -87,7 +88,7 @@ public class IAController {
             return ResponseEntity.ok(recs);
         } catch (Exception e) {
             log.error("Erreur lors de la génération des recommandations", e);
-            return ResponseEntity.internalServerError().body(Map.of("erreur", e.getMessage()));
+            return ResponseEntity.internalServerError().body(Map.of("erreur", MessageErreurUtil.messageClient(e)));
         }
     }
 
@@ -119,7 +120,7 @@ public class IAController {
             return ResponseEntity.ok(Map.of(
                     "scoreGlobal", 0,
                     "tendanceCA",  "STABLE",
-                    "erreur",      e.getMessage()
+                    "erreur",      MessageErreurUtil.messageClient(e)
             ));
         }
     }

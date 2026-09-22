@@ -1,5 +1,6 @@
 package com.ges.boutique.boutique;
 
+import com.ges.boutique.exception.MessageErreurUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -132,7 +133,7 @@ public class BoutiqueController {
         } catch (IOException e) {
             Map<String, Object> err = new HashMap<>();
             err.put("success", false);
-            err.put("message", "Erreur lors de la lecture du fichier: " + e.getMessage());
+            err.put("message", "Erreur lors de la lecture du fichier: " + MessageErreurUtil.messageClient(e));
             return ResponseEntity.internalServerError().body(err);
         }
     }

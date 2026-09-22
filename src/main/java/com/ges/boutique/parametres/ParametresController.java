@@ -1,6 +1,7 @@
 package com.ges.boutique.parametres;
 
 import com.ges.boutique.caisse.Caisse;
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.caisse.CaisseRepository;
 import com.ges.boutique.caisse.OperationCaisse;
 import com.ges.boutique.caisse.OperationCaisseRepository;
@@ -67,7 +68,7 @@ public class ParametresController {
             log.error("Erreur recuperation statut parametres: {}", e.getMessage(), e);
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("success", false);
-            err.put("message", "Erreur: " + e.getMessage());
+            err.put("message", "Erreur: " + MessageErreurUtil.messageClient(e));
             return ResponseEntity.internalServerError().body(err);
         }
     }
@@ -113,7 +114,7 @@ public class ParametresController {
             log.error("Erreur reinitialisation parametres: {}", e.getMessage(), e);
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", false);
-            response.put("message", "Erreur lors de la reinitialisation: " + e.getMessage());
+            response.put("message", "Erreur lors de la reinitialisation: " + MessageErreurUtil.messageClient(e));
             response.put("details", details);
             return ResponseEntity.internalServerError().body(response);
         }
@@ -171,7 +172,7 @@ public class ParametresController {
             log.error("Erreur suppression parametres: {}", e.getMessage(), e);
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", false);
-            response.put("message", "Erreur lors de la suppression: " + e.getMessage());
+            response.put("message", "Erreur lors de la suppression: " + MessageErreurUtil.messageClient(e));
             response.put("details", details);
             return ResponseEntity.internalServerError().body(response);
         }

@@ -1,5 +1,6 @@
 package com.ges.boutique.depense;
 
+import com.ges.boutique.exception.MessageErreurUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -33,7 +34,7 @@ public class TypeDepenseController {
             }
             return ResponseEntity.ok(typeDepenseService.creer(nom));
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(MessageErreurUtil.messageClient(e));
         }
     }
 
@@ -47,7 +48,7 @@ public class TypeDepenseController {
             }
             return ResponseEntity.ok(typeDepenseService.modifier(id, nom));
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(MessageErreurUtil.messageClient(e));
         }
     }
 
@@ -58,7 +59,7 @@ public class TypeDepenseController {
             typeDepenseService.supprimer(id);
             return ResponseEntity.ok().build();
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(MessageErreurUtil.messageClient(e));
         }
     }
 }
