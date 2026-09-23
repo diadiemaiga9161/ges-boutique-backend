@@ -30,6 +30,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
     private final ObjectMapper objectMapper;
+    private final PresenceService presenceService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -120,6 +121,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     );
 
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                    presenceService.marquerActif(username);
                 }
             }
         } catch (Exception e) {

@@ -97,6 +97,13 @@ public class Boutique {
     @Column(name = "fidelite_point_valeur", columnDefinition = "DOUBLE DEFAULT 10")
     private Double fidelitePointValeur = 10.0;
 
+    // Adresse email qui reçoit une copie des sauvegardes automatiques — définie
+    // uniquement par le super admin (voir BoutiqueController#definirEmailSauvegarde),
+    // envoi actif seulement si feature.CleFonctionnalite.ENVOI_SAUVEGARDES_EMAIL est
+    // activée pour cette boutique (voir BackupServiceImpl).
+    @Column(name = "email_sauvegarde")
+    private String emailSauvegarde;
+
     @PrePersist
     protected void onCreate() {
         dateCreation = LocalDateTime.now();

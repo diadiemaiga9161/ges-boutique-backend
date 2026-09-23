@@ -20,7 +20,9 @@ public enum CleFonctionnalite {
     RESULTAT_NET("Résultat net"),
     PROGRAMME_FIDELITE("Programme de fidélité"),
     VENTE_GROS_DETAIL("Vente en gros et au détail"),
-    IMPRESSION_TICKET("Impression de reçu (imprimante thermique)");
+    IMPRESSION_TICKET("Impression de reçu (imprimante thermique)"),
+    VOIR_PERSONNES_EN_LIGNE("Voir les personnes en ligne"),
+    ENVOI_SAUVEGARDES_EMAIL("Recevoir les sauvegardes par email");
 
     private final String libelle;
 

@@ -1,5 +1,10 @@
 package com.ges.boutique.backup;
 
+import com.ges.boutique.boutique.Boutique;
+import com.ges.boutique.boutique.BoutiqueService;
+import com.ges.boutique.email.EmailService;
+import com.ges.boutique.feature.CleFonctionnalite;
+import com.ges.boutique.feature.FeatureToggleService;
 import com.ges.boutique.feature.FonctionnaliteBoutique;
 import com.ges.boutique.feature.FonctionnaliteBoutiqueRepository;
 import com.ges.boutique.utilisateur.Utilisateur;
@@ -11,6 +16,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -60,6 +66,9 @@ public class BackupServiceImpl implements BackupService {
     // BackupService.restaurer pour le détail du principe.
     private final UtilisateurRepository utilisateurRepository;
     private final FonctionnaliteBoutiqueRepository fonctionnaliteBoutiqueRepository;
+    private final FeatureToggleService featureToggleService;
+    private final BoutiqueService boutiqueService;
+    private final EmailService emailService;
 
     @Value("${spring.datasource.url}")
     private String datasourceUrl;
@@ -73,7 +82,7 @@ public class BackupServiceImpl implements BackupService {
     // Nom volontairement "retention-jours" (voir application.properties) mais interprété
     // ici comme "nombre de fichiers a conserver" : comme il y a au plus une sauvegarde par
     // jour, les deux notions coincident en pratique.
-    @Value("${backup.retention-jours:14}")
+    @Value("${backup.retention-jours:2}")
     private int retentionFichiers;
 
     /**
@@ -95,8 +104,32 @@ public class BackupServiceImpl implements BackupService {
         if (resultat.isSuccess()) {
             log.info("Sauvegarde automatique programmée réussie : fichier={}, taille={} octets",
                     resultat.getNomFichier(), resultat.getTailleOctets());
+            envoyerSauvegardeParEmailSiActif(resultat.getNomFichier());
         } else {
             log.error("Sauvegarde automatique programmée échouée : {}", resultat.getMessage());
+        }
+    }
+
+    // Copie la sauvegarde par email — uniquement si le super admin a activé
+    // ENVOI_SAUVEGARDES_EMAIL pour cette boutique ET renseigné une adresse (voir
+    // BoutiqueController#definirEmailSauvegarde). Un échec d'envoi ne doit jamais faire
+    // planter le scheduler : la sauvegarde locale a déjà réussi, seul l'envoi est en plus.
+    private void envoyerSauvegardeParEmailSiActif(String nomFichier) {
+        if (!featureToggleService.estActive(CleFonctionnalite.ENVOI_SAUVEGARDES_EMAIL)) {
+            return;
+        }
+        Boutique boutique = boutiqueService.obtenirBoutique();
+        String destinataire = boutique.getEmailSauvegarde();
+        if (destinataire == null || destinataire.isBlank()) {
+            log.warn("ENVOI_SAUVEGARDES_EMAIL activé mais aucune adresse email configurée pour la boutique — envoi ignoré");
+            return;
+        }
+        try {
+            File fichier = Paths.get(DOSSIER_BACKUPS).resolve(nomFichier).toFile();
+            emailService.envoyerSauvegarde(destinataire, boutique.getNom(), fichier);
+            log.info("Sauvegarde {} envoyée par email à {}", nomFichier, destinataire);
+        } catch (Exception e) {
+            log.error("Échec de l'envoi de la sauvegarde par email à {} : {}", destinataire, e.getMessage(), e);
         }
     }
 

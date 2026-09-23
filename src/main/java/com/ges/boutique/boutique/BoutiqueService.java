@@ -125,4 +125,13 @@ public class BoutiqueService {
 
         return boutiqueRepository.save(existingBoutique);
     }
+
+    // Réservé au SUPER_ADMIN (voir BoutiqueController) : seul endroit où
+    // email_sauvegarde peut être modifié — un admin classique ne peut pas choisir
+    // qui reçoit une copie des sauvegardes de sa boutique.
+    public Boutique definirEmailSauvegarde(String emailSauvegarde) {
+        Boutique existingBoutique = obtenirBoutique();
+        existingBoutique.setEmailSauvegarde(emailSauvegarde != null && !emailSauvegarde.isBlank() ? emailSauvegarde.trim() : null);
+        return boutiqueRepository.save(existingBoutique);
+    }
 }

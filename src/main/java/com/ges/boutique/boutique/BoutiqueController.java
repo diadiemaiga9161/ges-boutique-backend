@@ -98,6 +98,21 @@ public class BoutiqueController {
         return ResponseEntity.ok(response);
     }
 
+    // L'admin classique de la boutique peut recevoir les sauvegardes par email si le
+    // super admin active feature.ENVOI_SAUVEGARDES_EMAIL pour sa boutique ET renseigne
+    // ici l'adresse qui les reçoit — jamais choisie par l'admin de boutique lui-même.
+    @PutMapping("/email-sauvegarde")
+    @PreAuthorize("hasRole('ADMIN') and authentication.principal.superAdmin")
+    @Operation(summary = "Définir l'adresse email qui reçoit les sauvegardes — réservé au super admin")
+    public ResponseEntity<Map<String, Object>> definirEmailSauvegarde(@RequestBody Map<String, String> body) {
+        Boutique boutique = boutiqueService.definirEmailSauvegarde(body.get("emailSauvegarde"));
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Adresse email de sauvegarde mise à jour");
+        response.put("boutique", boutique);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping(value = "/upload-logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Uploader le logo de la boutique (PNG, JPG, SVG — max 2 Mo)")

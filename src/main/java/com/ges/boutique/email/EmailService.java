@@ -5,12 +5,15 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
+
+import java.io.File;
 
 @Slf4j
 @Service
@@ -61,6 +64,27 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Erreur envoi mail bienvenue a {}: {}", destinataire, e.getMessage());
         }
+    }
+
+    // Envoi synchrone (pas @Async) volontaire : appelé depuis la sauvegarde programmée,
+    // qui doit savoir si l'envoi a réussi ou échoué (voir BackupServiceImpl) pour logguer
+    // correctement, plutôt que d'échouer silencieusement en tâche de fond.
+    public void envoyerSauvegarde(String destinataire, String nomBoutique, File fichierSauvegarde) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        try {
+            helper.setFrom(from, fromName);
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new MessagingException("Adresse d'expédition invalide", e);
+        }
+        helper.setTo(destinataire);
+        helper.setSubject("Sauvegarde automatique — " + nomBoutique);
+        helper.setText(
+                "Bonjour,<br><br>Voici la dernière sauvegarde automatique de la boutique "
+                        + nomBoutique + ", en pièce jointe.<br><br>Ce message est envoyé automatiquement.",
+                true);
+        helper.addAttachment(fichierSauvegarde.getName(), new FileSystemResource(fichierSauvegarde));
+        mailSender.send(message);
     }
 
     private void envoyer(String destinataire, String sujet, String contenuHtml) throws MessagingException, java.io.UnsupportedEncodingException {
