@@ -565,6 +565,41 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Gère les RuntimeException levées telles quelles (throw new RuntimeException("message"))
+     * — convention déjà utilisée dans plusieurs services (CaisseServiceImpl, TypeDepenseServiceImpl,
+     * CategorieServiceImpl, ProduitServiceImpl, UtilisateurServiceImpl, ClientReleveService) pour
+     * des erreurs métier avec un message déjà rédigé en français ("Le nom d'utilisateur existe déjà",
+     * "Un type de dépense avec ce nom existe déjà"...). Sans ce handler, ces exceptions tombaient
+     * dans handleGlobalException ci-dessous, qui jette le vrai message et renvoie 500 + un texte
+     * générique — le client ne voyait jamais la vraie raison (ex: doublon de nom d'utilisateur).
+     *
+     * Ne s'applique qu'à la classe RuntimeException exacte, jamais à ses sous-classes (une
+     * NullPointerException, ClassCastException... reste un vrai bug technique et doit continuer
+     * à retomber dans le catch-all générique — voir ex.getClass() != RuntimeException.class ci-dessous).
+     */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, Object>> handleRuntimeException(
+            RuntimeException ex,
+            WebRequest request) {
+
+        if (ex.getClass() != RuntimeException.class) {
+            return handleGlobalException(ex, request);
+        }
+
+        log.warn("Erreur métier (RuntimeException) : {}", ex.getMessage());
+
+        Map<String, Object> body = createErrorBody(
+                HttpStatus.BAD_REQUEST,
+                "Bad Request",
+                MessageErreurUtil.messageClient(ex),
+                request.getDescription(false)
+        );
+        body.put(ERROR_CODE, "BUSINESS_ERROR");
+
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
      * Handle all other exceptions
      */
     @ExceptionHandler(Exception.class)

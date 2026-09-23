@@ -1,6 +1,7 @@
 package com.ges.boutique.caisse;
 
 import com.ges.boutique.config.NotificationService;
+import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.exception.RessourceIntrouvableException;
 import com.ges.boutique.exception.SoldeInsuffisantException;
 import com.ges.boutique.client.Client;
@@ -140,7 +141,7 @@ public class CaisseServiceImpl implements CaisseService {
 
         } catch (Exception e) {
             log.error("Erreur lors de l'ouverture de la caisse: {}", e.getMessage(), e);
-            throw new RuntimeException("Impossible d'ouvrir la caisse: " + e.getMessage(), e);
+            throw new RuntimeException("Impossible d'ouvrir la caisse: " + MessageErreurUtil.messageClient(e));
         }
     }
 
