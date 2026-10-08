@@ -399,7 +399,7 @@
     "NEW": "Nouvel objectif", "SUPPLIER": "Fournisseur", "TARGET": "Objectif",
     "ACHIEVED": "Réalisé", "PROGRESS": "Progression", "EMPTY": "Aucun objectif défini"
   },
-  "SUPPLIERS": {
+  "SUPPLIERS": { "PERIOD_TODAY": "Aujourd'hui", "PERIOD_WEEK": "Semaine", "PERIOD_MONTH": "Mois", "PERIOD_CUSTOM": "Personnalisé", "FROM_DATE": "Du", "TO_DATE": "Au", "APPLY": "Appliquer", "ADVANCES": "Avances", "UNPAID_PURCHASES": "Achats non payés", "PAY_THIS_PURCHASE": "Payer cet achat", "NO_UNPAID_PURCHASES": "Aucun achat non payé",
     "TITLE": "Fournisseurs", "SUBTITLE": "Gestion de vos fournisseurs",
     "NEW": "Nouveau fournisseur", "NAME": "Nom", "PHONE": "Téléphone",
     "ADDRESS": "Adresse", "EMPTY": "Aucun fournisseur enregistré",

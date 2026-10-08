@@ -40,6 +40,14 @@ public interface ProduitRepository extends JpaRepository<Produit, Long> {
     @Query("SELECT SUM(p.prixAchat * p.quantite) FROM Produit p")
     Double getValeurTotaleStock();
 
+    // Chiffres de l'accueil mobile sans la liste des produits, mêmes règles que l'appli
+    // (valeur vide comptée 0) : [valeur du stock, stock faible, rupture, nombre de produits].
+    @Query("SELECT COALESCE(SUM(COALESCE(p.prixAchat, 0) * COALESCE(p.quantite, 0)), 0), " +
+           "COALESCE(SUM(CASE WHEN COALESCE(p.quantite, 0) <= COALESCE(p.seuilAlerte, 0) THEN 1 ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN COALESCE(p.quantite, 0) <= 0 THEN 1 ELSE 0 END), 0), " +
+           "COUNT(p) FROM Produit p")
+    List<Object[]> indicateursStock();
+
     boolean existsByNomAndCategorieId(String nom, Long categorieId);
 
     List<Produit> findByDatePeremptionBefore(LocalDate date);

@@ -31,6 +31,7 @@ public class ProduitController {
 
     private final ProduitService produitService;
     private final CategorieService categorieService;
+    private final ProduitRepository produitRepository;
 
     // ==================== PRODUITS ====================
 
@@ -474,6 +475,19 @@ public class ProduitController {
     public ResponseEntity<ProduitDto> obtenirProduitDtoParCodeBarre(@PathVariable String codeBarre) {
         Produit produit = produitService.obtenirProduitParCodeBarre(codeBarre);
         return ResponseEntity.ok(produitService.convertirEnDto(produit));
+    }
+
+    @GetMapping("/indicateurs-stock")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
+    @Operation(summary = "Ruptures, stock faible et valeur du stock, sans la liste des produits (accueil mobile)")
+    public ResponseEntity<Map<String, Object>> obtenirIndicateursStock() {
+        Object[] r = produitRepository.indicateursStock().stream().findFirst().orElse(new Object[]{0, 0, 0, 0});
+        Map<String, Object> indicateurs = new HashMap<>();
+        indicateurs.put("valeurTotale", ((Number) r[0]).doubleValue());
+        indicateurs.put("produitsStockFaible", ((Number) r[1]).longValue());
+        indicateurs.put("produitsRupture", ((Number) r[2]).longValue());
+        indicateurs.put("totalProduits", ((Number) r[3]).longValue());
+        return ResponseEntity.ok(indicateurs);
     }
 
     @GetMapping("/statistiques")

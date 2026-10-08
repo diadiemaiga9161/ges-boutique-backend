@@ -249,7 +249,7 @@
     "NEW": "New target", "SUPPLIER": "Supplier", "TARGET": "Target",
     "ACHIEVED": "Achieved", "PROGRESS": "Progress", "EMPTY": "No targets defined"
   },
-  "SUPPLIERS": {
+  "SUPPLIERS": { "PERIOD_TODAY": "Today", "PERIOD_WEEK": "Week", "PERIOD_MONTH": "Month", "PERIOD_CUSTOM": "Custom", "FROM_DATE": "From", "TO_DATE": "To", "APPLY": "Apply", "ADVANCES": "Advances", "UNPAID_PURCHASES": "Unpaid purchases", "PAY_THIS_PURCHASE": "Pay this purchase", "NO_UNPAID_PURCHASES": "No unpaid purchases",
     "TITLE": "Suppliers", "SUBTITLE": "Manage your suppliers",
     "NEW": "New supplier", "NAME": "Name", "PHONE": "Phone",
     "ADDRESS": "Address", "EMPTY": "No suppliers registered",
