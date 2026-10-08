@@ -786,6 +786,126 @@ public class VenteServiceImpl implements VenteService {
         return stats;
     }
 
+    /**
+     * Résumé d'une période (accueil et rapports des applis) calculé par la base de données :
+     * seuls les totaux voyagent, jamais la liste des ventes. Mêmes règles que les écrans
+     * qui additionnaient les ventes de GET /ventes/periode : ventes annulées exclues,
+     * CA = somme des montantTotal.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> obtenirResumePeriode(LocalDate dateDebut, LocalDate dateFin, int nbTopProduits) {
+        LocalDateTime debut = dateDebut.atStartOfDay();
+        LocalDateTime fin = dateFin.atTime(LocalTime.MAX);
+
+        Object[] totaux = venteRepository.totauxPeriode(debut, fin).stream().findFirst().orElse(new Object[]{0L, 0.0, 0.0});
+        long nombreVentes = ((Number) totaux[0]).longValue();
+        double chiffreAffaire = ((Number) totaux[1]).doubleValue();
+        double remises = ((Number) totaux[2]).doubleValue();
+
+        List<Map<String, Object>> modes = new ArrayList<>();
+        for (Object[] r : venteRepository.totauxParModePaiement(debut, fin)) {
+            double montant = ((Number) r[1]).doubleValue();
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("mode", r[0] != null ? r[0].toString() : "ESPECES");
+            m.put("montant", montant);
+            m.put("nombreVentes", ((Number) r[2]).longValue());
+            m.put("pourcentage", chiffreAffaire > 0 ? montant / chiffreAffaire * 100 : 0);
+            modes.add(m);
+        }
+        modes.sort((a, b) -> Double.compare((Double) b.get("montant"), (Double) a.get("montant")));
+
+        // Une ligne par produit vendu ; quantités des produits à la mesure ramenées en kg/L/m
+        // pour un classement juste (comme GET /rapports/top-produits).
+        // CA « quantité × prix » en plus des sous-totaux : c'est le calcul des rapports du site.
+        Map<String, double[]> parNom = new LinkedHashMap<>(); // [quantité affichée, CA, CA quantité × prix]
+        Map<String, com.ges.boutique.produit.ModeMesure> modesMesure = new HashMap<>();
+        Map<String, String> categorieParNom = new HashMap<>();
+        Map<String, double[]> parCategorie = new LinkedHashMap<>(); // [CA quantité × prix, quantité brute]
+        double benefice = 0;
+        for (Object[] r : ligneVenteRepository.totauxParProduit(debut, fin)) {
+            benefice += ((Number) r[5]).doubleValue();
+            String nom = r[1] != null ? (String) r[1] : "Produit";
+            com.ges.boutique.produit.ModeMesure mm = (com.ges.boutique.produit.ModeMesure) r[2];
+            double qte = ((Number) r[3]).doubleValue();
+            double caPrix = ((Number) r[7]).doubleValue();
+            double[] agg = parNom.computeIfAbsent(nom, k -> new double[3]);
+            agg[0] += mm == null ? qte : qte / mm.getFacteur();
+            agg[1] += ((Number) r[4]).doubleValue();
+            agg[2] += caPrix;
+            if (mm != null) modesMesure.put(nom, mm);
+            if (r[6] != null) categorieParNom.putIfAbsent(nom, (String) r[6]);
+            double[] cat = parCategorie.computeIfAbsent(r[6] != null ? (String) r[6] : "Non catégorisé", k -> new double[2]);
+            cat[0] += caPrix;
+            cat[1] += qte;
+        }
+        List<Map<String, Object>> topProduits = parNom.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue()[0], a.getValue()[0]))
+                .limit(nbTopProduits)
+                .map(e -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("nom", e.getKey());
+                    m.put("quantite", e.getValue()[0]);
+                    // Texte seulement pour la vente à la mesure ("12,5 kg") ; sinon les écrans affichent la quantité.
+                    com.ges.boutique.produit.ModeMesure mm = modesMesure.get(e.getKey());
+                    m.put("quantiteTexte", mm != null ? com.ges.boutique.produit.ModeMesure.texteAffiche(mm, e.getValue()[0]) : null);
+                    m.put("chiffreAffaire", e.getValue()[1]);
+                    m.put("chiffreAffairePrix", e.getValue()[2]);
+                    m.put("categorie", categorieParNom.get(e.getKey()));
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> categories = parCategorie.entrySet().stream()
+                .filter(e -> e.getValue()[0] > 0)
+                .sorted((a, b) -> Double.compare(b.getValue()[0], a.getValue()[0]))
+                .map(e -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("nom", e.getKey());
+                    m.put("chiffreAffaire", e.getValue()[0]);
+                    m.put("quantiteVendue", e.getValue()[1]);
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> vendeurs = new ArrayList<>();
+        for (Object[] r : venteRepository.totauxParVendeur(debut, fin)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r[0]);
+            m.put("nomComplet", r[1] != null ? r[1] : "Vendeur " + r[0]);
+            m.put("nombreVentes", ((Number) r[2]).longValue());
+            m.put("chiffreAffaire", ((Number) r[3]).doubleValue());
+            vendeurs.add(m);
+        }
+        vendeurs.sort((a, b) -> Double.compare((Double) b.get("chiffreAffaire"), (Double) a.get("chiffreAffaire")));
+
+        // Bénéfice selon le calcul du site : bénéfice enregistré sur la vente, sinon ses lignes.
+        Double beneficesEnregistres = venteRepository.sommeBeneficesEnregistres(debut, fin);
+        Double beneficeLignes = ligneVenteRepository.beneficeLignesSansBeneficeVente(debut, fin);
+        double beneficeBrut = (beneficesEnregistres != null ? beneficesEnregistres : 0) + (beneficeLignes != null ? beneficeLignes : 0);
+
+        Map<String, Double> parJour = new LinkedHashMap<>();
+        for (Object[] r : venteRepository.chiffreAffaireParJour(debut, fin)) {
+            parJour.put((String) r[0], ((Number) r[1]).doubleValue());
+        }
+
+        Map<String, Object> resume = new LinkedHashMap<>();
+        resume.put("dateDebut", dateDebut.toString());
+        resume.put("dateFin", dateFin.toString());
+        resume.put("nombreVentes", nombreVentes);
+        resume.put("chiffreAffaireTotal", chiffreAffaire);
+        resume.put("montantRemisesTotal", remises);
+        resume.put("panierMoyen", nombreVentes > 0 ? chiffreAffaire / nombreVentes : 0);
+        resume.put("beneficeTotal", benefice);
+        resume.put("beneficeBrut", beneficeBrut);
+        resume.put("topProduits", topProduits);
+        resume.put("modePaiementStats", modes);
+        resume.put("categories", categories);
+        resume.put("vendeurs", vendeurs);
+        resume.put("chiffreAffaireParJour", parJour);
+        return resume;
+    }
+
     @Override
     public Map<String, Object> getStatistiquesCredits() {
         Map<String, Object> stats = new HashMap<>();

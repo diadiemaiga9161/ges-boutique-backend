@@ -18,6 +18,41 @@ public interface VenteRepository extends JpaRepository<Vente, Long> {
     @Query("SELECT v FROM Vente v WHERE v.dateVente BETWEEN :debut AND :fin ORDER BY v.dateVente DESC")
     List<Vente> findByDateRange(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
 
+    // Totaux d'une période calculés par la base (sans charger les ventes) : [nombre, CA, remises].
+    @Query("SELECT COUNT(v), COALESCE(SUM(v.montantTotal), 0), COALESCE(SUM(v.montantRemiseTotal), 0) FROM Vente v " +
+           "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false)")
+    List<Object[]> totauxPeriode(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    // Répartition par mode de paiement sur une période : [modePaiement, CA, nombre de ventes].
+    @Query("SELECT v.modePaiement, COALESCE(SUM(v.montantTotal), 0), COUNT(v) FROM Vente v " +
+           "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
+           "GROUP BY v.modePaiement")
+    List<Object[]> totauxParModePaiement(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    // Par vendeur sur une période : [vendeurId, nomComplet, nombre de ventes, CA].
+    @Query("SELECT u.id, u.nomComplet, COUNT(v), COALESCE(SUM(v.montantTotal), 0) FROM Vente v LEFT JOIN v.vendeur u " +
+           "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
+           "GROUP BY u.id, u.nomComplet")
+    List<Object[]> totauxParVendeur(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    // Somme des bénéfices enregistrés sur les ventes (celles qui en ont un).
+    @Query("SELECT COALESCE(SUM(v.beneficeTotal), 0) FROM Vente v " +
+           "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
+           "AND v.beneficeTotal IS NOT NULL AND v.beneficeTotal <> 0")
+    Double sommeBeneficesEnregistres(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    // CA par jour sur une période : [date (yyyy-MM-dd), CA].
+    @Query(value = "SELECT DATE_FORMAT(v.date_vente, '%Y-%m-%d') AS jour, COALESCE(SUM(v.montant_total), 0) AS ca FROM ventes v " +
+                   "WHERE v.date_vente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = 0) " +
+                   "GROUP BY DATE_FORMAT(v.date_vente, '%Y-%m-%d') ORDER BY jour",
+           nativeQuery = true)
+    List<Object[]> chiffreAffaireParJour(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    // Ventes « client divers » d'une période (non annulées), mêmes critères que l'écran Clients.
+    @Query("SELECT v FROM Vente v WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
+           "AND (v.clientDivers = true OR LOWER(v.clientNom) LIKE '%divers%') ORDER BY v.dateVente DESC")
+    List<Vente> findClientsDiversParPeriode(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
     @Query("SELECT v FROM Vente v WHERE v.dateVente >= :debut AND v.dateVente <= :fin ORDER BY v.dateVente DESC")
     List<Vente> findTodayVentes(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
 

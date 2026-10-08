@@ -212,6 +212,16 @@ public class VenteController {
         return ResponseEntity.ok(venteMapper.toVenteMapList(ventes));
     }
 
+    @GetMapping("/clients-divers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
+    @Operation(summary = "Ventes des clients divers sur une période (filtre côté serveur)")
+    public ResponseEntity<List<Map<String, Object>>> obtenirVentesClientsDivers(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin) {
+        List<Vente> ventes = venteRepository.findClientsDiversParPeriode(dateDebut.atStartOfDay(), dateFin.atTime(java.time.LocalTime.MAX));
+        return ResponseEntity.ok(venteMapper.toVenteMapList(ventes));
+    }
+
     @GetMapping("/aujourdhui")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
     @Operation(summary = "Obtenir les ventes du jour")
@@ -499,6 +509,16 @@ public class VenteController {
     @Operation(summary = "Statistiques chiffre d'affaires")
     public ResponseEntity<Map<String, Object>> obtenirStatistiquesChiffreAffaire() {
         return ResponseEntity.ok(venteService.obtenirStatistiquesChiffreAffaire());
+    }
+
+    @GetMapping("/statistiques/periode")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
+    @Operation(summary = "Résumé d'une période (totaux, top produits, modes de paiement) sans la liste des ventes")
+    public ResponseEntity<Map<String, Object>> obtenirResumePeriode(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(defaultValue = "8") int top) {
+        return ResponseEntity.ok(venteService.obtenirResumePeriode(dateDebut, dateFin, Math.max(1, Math.min(top, 50))));
     }
 
     @GetMapping("/statistiques/journalieres")

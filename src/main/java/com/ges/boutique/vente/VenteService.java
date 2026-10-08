@@ -51,6 +51,7 @@ public interface VenteService {
     Map<String, Object> obtenirStatistiquesJournalieres(LocalDate date);
     Map<String, Object> obtenirStatistiquesHebdomadaires();
     Map<String, Object> obtenirStatistiquesMensuelles();
+    Map<String, Object> obtenirResumePeriode(LocalDate dateDebut, LocalDate dateFin, int nbTopProduits);
     Map<String, Object> getStatistiquesCredits();
 
     Long compterVentesParDateRange(LocalDateTime debut, LocalDateTime fin);
