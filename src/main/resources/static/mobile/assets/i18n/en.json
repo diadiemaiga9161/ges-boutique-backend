@@ -1,4 +1,5 @@
 {
+  "FIDELITE": {"TITLE":"Loyalty","LOADING":"Loading points…","CLIENT_SOLDE":"This client has {{points}} points, worth {{valeur}}","POINTS_LABEL":"points","REDUCTION":"Loyalty discount","REDUCTION_HINT":"Discount of {{montant}} applied when confirming","CLIENT_BALANCE":"Points balance","CLIENT_BALANCE_VALUE":"Points value","ADJUST_TITLE":"Adjust points","ADJUST_DELTA":"Points to add or remove (e.g. 10 or -5)","ADJUST_MOTIF":"Reason","ADJUST_BUTTON":"Adjust","HISTORY_TITLE":"Points history","HISTORY_EMPTY":"No points movement","VENTE_REF":"Sale","SETTINGS_TITLE":"Loyalty program","SETTINGS_DESC":"Clients earn points with every purchase and use them as a discount.","AMOUNT_PER_POINT":"Purchase amount for 1 point (FCFA)","POINT_VALUE":"Value of one point (FCFA)"},
   "LANG": {
     "SELECT": "Language",
     "FR": "Français",
@@ -35,6 +36,7 @@
     "REFRESH": "Refresh", "SEND": "Send", "ALL": "All", "ACTIVE": "Active", "INACTIVE": "Inactive"
   },
   "NAV": {
+    "HOME": "Home", "MENU": "Menu",
     "PRODUCTS": "Products", "SALES": "Sales", "CLIENTS": "Clients",
     "CAISSE": "Cash Register", "INVENTORY": "Inventory", "REPORTS": "Reports",
     "PROFILE": "Profile", "MORE": "More", "BENEFITS": "Benefits",
@@ -46,7 +48,7 @@
     "MOBILE_MONEY": "Mobile Money", "INVOICE_DESIGN": "Invoice Design",
     "REPORT": "Report", "PROMO": "Promotions", "NOTIFICATIONS": "Notifications", "ORDERS": "Orders"
   },
-  "PROFILE": {
+  "PROFILE": { "APPEARANCE": "Appearance", "THEME_LIGHT": "Light", "THEME_DARK": "Dark", "THEME_AUTO": "Auto",
     "TITLE": "My Profile", "FULL_NAME": "Full name", "EMAIL": "Email",
     "PHONE": "Phone", "COUNTRY_CODE": "Country code", "PASSWORD": "New password",
     "SAVE": "Save changes", "LANGUAGE": "App language", "ROLE": "Role",
@@ -56,6 +58,13 @@
     "VOICE_CONFIRM_DESC": "The phone announces the total out loud after each validated sale"
   },
   "PRODUCTS": {
+    "STOCK_OK": "OK",
+    "STOCK_LOW_SHORT": "Low",
+    "STOCK_OUT_SHORT": "Out",
+    "ALERTS_TITLE": "Stock alerts",
+    "ALERTS_OUT_COUNT": "{{count}} out of stock",
+    "ALERTS_LOW_COUNT": "{{count}} low stock",
+    "ALERT_IMMINENT": "Running out soon",
     "TITLE": "Products", "ADD": "New product", "NAME": "Product name *",
     "PRICE_SELL": "Selling price", "PRICE_BUY": "Purchase price", "STOCK": "Stock",
     "CATEGORY": "Category", "SUPPLIER": "Supplier", "BARCODE": "Barcode",
@@ -107,7 +116,7 @@
     "DATE_ANNULATION": "Cancellation date", "MOTIF_ANNULATION": "Reason",
     "ANNULEUR": "Cancelled by", "VENDEUR": "Seller"
   },
-  "CLIENTS": {
+  "CLIENTS": { "EMPTY": "No client found",
     "TITLE": "Clients", "ADD": "New client", "NAME": "Last name",
     "FIRSTNAME": "First name", "PHONE": "Phone", "EMAIL": "Email",
     "ADDRESS": "Address", "QR_CODE": "Client QR Code", "HISTORY": "History",
@@ -116,7 +125,34 @@
     "NO_RESULTS": "No results found"
   },
   "RELEVE": {
-    "BUTTON": "Statement"
+    "BUTTON": "Statement",
+    "TITLE": "Customer statement",
+    "TOTAL_SALES": "Total sales",
+    "TOTAL_PAYMENTS": "Total paid",
+    "BALANCE": "Current balance",
+    "PERIOD_TODAY": "Today",
+    "PERIOD_YESTERDAY": "Yesterday",
+    "PERIOD_WEEK": "This week",
+    "PERIOD_MONTH": "This month",
+    "PERIOD_YEAR": "This year",
+    "PERIOD_CUSTOM": "Custom",
+    "PERIOD_ALL": "All",
+    "FROM_DATE": "From",
+    "TO_DATE": "To",
+    "APPLY": "Apply",
+    "TYPE_ALL": "All transactions",
+    "TYPE_SALES": "Sales only",
+    "TYPE_PAYMENTS": "Payments only",
+    "EMPTY": "No transactions for this period",
+    "SALE_AMOUNT": "Sale amount",
+    "PAYMENT_AMOUNT": "Amount paid",
+    "BALANCE_AFTER": "Balance due",
+    "PREVIOUS": "Previous",
+    "NEXT": "Next",
+    "PAGE": "Page",
+    "OF": "of",
+    "SHOW_SALES": "Show the {{count}} sales",
+    "HIDE_SALES": "Hide sales"
   },
   "CAISSE": {
     "TITLE": "Cash Register", "BALANCE": "Current balance", "INCOME": "Income",
@@ -458,6 +494,21 @@
     "CREDITS": "credits",
     "VENTES": "sales",
     "ACCES_REFUSE": "Access restricted to administrators"
+  },
+  "PARAMETRES_HUB": {
+    "SECTION_APPARENCE": "Appearance",
+    "ITEM_APPARENCE": "Theme & appearance",
+    "SECTION_LANGUE": "Language",
+    "ITEM_LANGUE": "Language",
+    "SECTION_NOTIFICATIONS": "Notifications",
+    "ITEM_NOTIFICATIONS": "Notifications",
+    "SECTION_BOUTIQUE": "Shop",
+    "ITEM_BOUTIQUE_INFO": "Shop information",
+    "ITEM_FACTURE_DESIGN": "Invoice template",
+    "ITEM_EXPORT": "Data export",
+    "ITEM_JOURNAL_AUDIT": "Audit log",
+    "ITEM_SAUVEGARDES": "Backups",
+    "ITEM_REINIT": "Data reset"
   },
   "EXPORT": {
     "TITRE": "Data Export",

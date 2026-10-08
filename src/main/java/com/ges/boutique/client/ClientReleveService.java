@@ -2,8 +2,6 @@ package com.ges.boutique.client;
 
 import com.ges.boutique.boutique.Boutique;
 import com.ges.boutique.boutique.BoutiqueRepository;
-import com.ges.boutique.vente.Vente;
-import com.ges.boutique.vente.VenteRepository;
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
 import com.lowagie.text.pdf.*;
@@ -35,7 +33,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClientReleveService {
 
-    private final VenteRepository venteRepository;
     private final ClientRepository clientRepository;
     private final BoutiqueRepository boutiqueRepository;
     private final ClientReleveApiService clientReleveApiService;
@@ -69,13 +66,6 @@ public class ClientReleveService {
                 clientId, 0, Integer.MAX_VALUE, dateDebut, dateFin, type);
         List<ClientReleveLigneDto> lignes = (List<ClientReleveLigneDto>) situation.get("lignes");
 
-        List<Vente> ventes = venteRepository.findByClientId(clientId);
-        if (ventes.isEmpty()) {
-            String nomComplet = (client.getNom() + " " + client.getPrenom()).trim();
-            ventes = venteRepository.findByClientNomOrTelephone(
-                    nomComplet, client.getNumeroTelephone());
-        }
-
         Boutique boutique = boutiqueRepository.findFirstByActifTrue()
                 .orElse(new Boutique());
 
@@ -86,10 +76,11 @@ public class ClientReleveService {
             PdfWriter writer = PdfWriter.getInstance(doc, out);
             doc.open();
 
+            // Le PDF ne montre QUE ce que l'écran affiche pour la période et le filtre demandés :
+            // pas de section "crédits en cours", et des totaux limités au type filtré.
             ajouterEnTete(doc, writer, boutique, client, libellePeriode(dateDebut, dateFin, type));
-            ajouterResume(doc, situation);
+            ajouterResume(doc, situation, type);
             ajouterSituation(doc, lignes);
-            ajouterCreditsEnCours(doc, ventes);
             ajouterPied(doc, boutique);
 
             doc.close();
@@ -177,18 +168,27 @@ public class ClientReleveService {
         doc.add(infoClient);
     }
 
-    private void ajouterResume(Document doc, Map<String, Object> situation) throws DocumentException {
-        double totalVentes = nombre(situation.get("totalVentes"));
-        double totalVersements = nombre(situation.get("totalVersements"));
+    /**
+     * Totaux d'en-tête, limités au type filtré : "achats uniquement" n'affiche pas le total des
+     * versements, et inversement. "Reste à payer" (ce que le client doit aujourd'hui) reste
+     * toujours affiché — c'est l'information principale d'une situation client.
+     */
+    private void ajouterResume(Document doc, Map<String, Object> situation, String type) throws DocumentException {
+        boolean achatsSeuls = "VENTE".equalsIgnoreCase(type);
+        boolean versementsSeuls = "VERSEMENT".equalsIgnoreCase(type);
         double soldeActuel = nombre(situation.get("soldeActuel"));
 
-        PdfPTable resume = new PdfPTable(3);
+        PdfPTable resume = new PdfPTable(achatsSeuls || versementsSeuls ? 2 : 3);
         resume.setWidthPercentage(100);
         resume.setSpacingBefore(10);
         resume.setSpacingAfter(12);
 
-        addResumeCard(resume, "Total des achats", formatMontant(totalVentes), BLEU_PRIMAIRE);
-        addResumeCard(resume, "Total des versements", formatMontant(totalVersements), VERT_REGLE);
+        if (!versementsSeuls) {
+            addResumeCard(resume, "Total des achats", formatMontant(nombre(situation.get("totalVentes"))), BLEU_PRIMAIRE);
+        }
+        if (!achatsSeuls) {
+            addResumeCard(resume, "Total des versements", formatMontant(nombre(situation.get("totalVersements"))), VERT_REGLE);
+        }
         addResumeCard(resume, "Reste à payer", formatMontant(soldeActuel),
                 soldeActuel > 0 ? ROUGE_RETARD : GRIS_TEXTE);
         doc.add(resume);
@@ -269,7 +269,8 @@ public class ClientReleveService {
             }
             table.addCell(designation);
 
-            addCell(table, l.getQuantite() != null ? String.valueOf(l.getQuantite()) : "", fontCell, bg, Element.ALIGN_RIGHT);
+            addCell(table, l.getQuantiteTexte() != null ? l.getQuantiteTexte()
+                    : (l.getQuantite() != null ? String.valueOf(l.getQuantite()) : ""), fontCell, bg, Element.ALIGN_RIGHT);
             addCell(table, l.getPrixUnitaire() != null ? formatMontant(l.getPrixUnitaire()) : "", fontCell, bg, Element.ALIGN_RIGHT);
             addCell(table, l.getMontantVente() != null ? formatMontant(l.getMontantVente()) : "", fontCellBold, bg, Element.ALIGN_RIGHT);
             addCell(table, l.getMontantVersement() != null ? formatMontant(l.getMontantVersement()) : "",
@@ -278,55 +279,6 @@ public class ClientReleveService {
             addCell(table, reste != null ? formatMontant(reste) : "",
                     new Font(Font.HELVETICA, 7.5f, Font.BOLD, reste != null && reste > 0 ? ROUGE_RETARD : TEXTE), bg, Element.ALIGN_RIGHT);
             addCell(table, l.getUtilisateurNom() != null ? l.getUtilisateurNom() : "", fontCell, bg, Element.ALIGN_LEFT);
-        }
-
-        doc.add(table);
-        doc.add(new Paragraph(" "));
-    }
-
-    private void ajouterCreditsEnCours(Document doc, List<Vente> ventes) throws DocumentException {
-        List<Vente> credits = ventes.stream()
-                .filter(v -> Boolean.TRUE.equals(v.getEstCredit()) && !Boolean.TRUE.equals(v.getCreditRegle())
-                        && !Boolean.TRUE.equals(v.getAnnulee()))
-                .collect(Collectors.toList());
-
-        if (credits.isEmpty()) return;
-
-        Font fontTitre = new Font(Font.HELVETICA, 11, Font.BOLD, ORANGE_CREDIT);
-        Paragraph titre = new Paragraph("CRÉDITS EN COURS", fontTitre);
-        titre.setSpacingAfter(6);
-        doc.add(titre);
-
-        PdfPTable table = new PdfPTable(5);
-        table.setWidthPercentage(100);
-        table.setWidths(new float[]{1.4f, 1.2f, 1.2f, 1.2f, 1.2f});
-        table.setHeaderRows(1);
-
-        String[] headers = {"N° Vente", "Date vente", "Montant total", "Déjà versé", "Reste à payer"};
-        for (String h : headers) {
-            PdfPCell cell = new PdfPCell(new Phrase(h, new Font(Font.HELVETICA, 8, Font.BOLD, Color.WHITE)));
-            cell.setBackgroundColor(ORANGE_CREDIT);
-            cell.setBorderColor(ORANGE_CREDIT);
-            cell.setPadding(6);
-            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-            table.addCell(cell);
-        }
-
-        Font fontCell = new Font(Font.HELVETICA, 9, Font.NORMAL, TEXTE);
-        Font fontReste = new Font(Font.HELVETICA, 9, Font.BOLD, ROUGE_RETARD);
-        boolean pair = false;
-
-        for (Vente v : credits) {
-            Color bg = pair ? Color.WHITE : new Color(255, 247, 237);
-            pair = !pair;
-            double reste = v.getMontantRestant() != null ? v.getMontantRestant() :
-                    (v.getMontantTotal() != null ? v.getMontantTotal() : 0) - (v.getMontantVerse() != null ? v.getMontantVerse() : 0);
-
-            addCell(table, v.getNumeroVente() != null ? v.getNumeroVente() : "#" + v.getId(), fontCell, bg, Element.ALIGN_LEFT);
-            addCell(table, v.getDateVente() != null ? v.getDateVente().format(FMT) : "-", fontCell, bg, Element.ALIGN_CENTER);
-            addCell(table, formatMontant(v.getMontantTotal() != null ? v.getMontantTotal() : 0), fontCell, bg, Element.ALIGN_RIGHT);
-            addCell(table, formatMontant(v.getMontantVerse() != null ? v.getMontantVerse() : 0), fontCell, bg, Element.ALIGN_RIGHT);
-            addCell(table, formatMontant(reste), fontReste, bg, Element.ALIGN_RIGHT);
         }
 
         doc.add(table);
@@ -365,7 +317,8 @@ public class ClientReleveService {
     private String texteProduits(ClientReleveLigneDto.VenteReglee vr) {
         if (vr.getProduits() == null || vr.getProduits().isEmpty()) return "-";
         return vr.getProduits().stream()
-                .map(p -> texte(p.getProduitNom()) + (p.getQuantite() != null ? " ×" + p.getQuantite() : ""))
+                .map(p -> texte(p.getProduitNom()) + (p.getQuantiteTexte() != null ? " ×" + p.getQuantiteTexte()
+                        : (p.getQuantite() != null ? " ×" + p.getQuantite() : "")))
                 .collect(Collectors.joining(", "));
     }
 

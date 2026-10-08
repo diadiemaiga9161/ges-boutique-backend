@@ -22,7 +22,11 @@ public enum CleFonctionnalite {
     VENTE_GROS_DETAIL("Vente en gros et au détail"),
     IMPRESSION_TICKET("Impression de reçu (imprimante thermique)"),
     VOIR_PERSONNES_EN_LIGNE("Voir les personnes en ligne"),
-    ENVOI_SAUVEGARDES_EMAIL("Recevoir les sauvegardes par email");
+    ENVOI_SAUVEGARDES_EMAIL("Recevoir les sauvegardes par email"),
+    IMAGES_PRODUITS("Photos des produits"),
+    ROLES_PERSONNALISES("Rôles et permissions personnalisés"),
+    PRIMES_PRODUITS("Primes sur produits (vendeurs)"),
+    VENTE_A_LA_MESURE("Vente au poids / au litre / au mètre");
 
     private final String libelle;
 

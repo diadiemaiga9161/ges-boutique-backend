@@ -1,6 +1,7 @@
 package com.ges.boutique.produit;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,13 @@ import java.util.Optional;
 public interface ProduitRepository extends JpaRepository<Produit, Long> {
 
     List<Produit> findByCategorieId(Long categorieId);
+
+    /** Sans passer par l'entité : ne touche pas au verrou optimiste du stock (@Version).
+     *  flushAutomatically : écrit d'abord la photo modifiée/retirée (ProduitImageService),
+     *  sinon le clear qui suit l'effaçait avant son écriture (le remplacement restait sans effet). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Produit p SET p.imageVersion = :version WHERE p.id = :id")
+    int definirImageVersion(@Param("id") Long id, @Param("version") Long version);
 
     List<Produit> findByFournisseurId(Long fournisseurId);
 

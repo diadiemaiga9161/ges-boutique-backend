@@ -38,8 +38,10 @@ public class PublicFactureController {
         for (LigneVente l : lignes) {
             lignesHtml.append("<tr>")
                 .append("<td>").append(esc(l.getProduitNom())).append("</td>")
-                .append("<td style='text-align:center'>").append(l.getQuantite()).append("</td>")
-                .append("<td style='text-align:right'>").append(fmt(l.getPrixUnitaire())).append("</td>")
+                // Vente à la mesure : "1,25 kg" et "600 F/kg" plutôt que 1250 et 0,6 F.
+                .append("<td style='text-align:center'>").append(esc(com.ges.boutique.produit.ModeMesure.quantiteLisible(l.getProduit(), l.getQuantite()))).append("</td>")
+                .append("<td style='text-align:right'>").append(fmt(com.ges.boutique.produit.ModeMesure.prixLisible(l.getProduit(), l.getPrixUnitaire())))
+                .append(com.ges.boutique.produit.ModeMesure.suffixePrix(l.getProduit())).append("</td>")
                 .append("<td style='text-align:right;font-weight:700'>").append(fmt(l.getSousTotal())).append("</td>")
                 .append("</tr>");
         }

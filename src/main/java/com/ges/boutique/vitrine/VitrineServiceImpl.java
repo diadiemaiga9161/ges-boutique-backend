@@ -2,6 +2,9 @@ package com.ges.boutique.vitrine;
 
 import com.ges.boutique.boutique.Boutique;
 import com.ges.boutique.boutique.BoutiqueService;
+import com.ges.boutique.commande.Commande;
+import com.ges.boutique.commande.CommandeRepository;
+import com.ges.boutique.commande.OrigineCommande;
 import com.ges.boutique.produit.Produit;
 import com.ges.boutique.produit.ProduitRepository;
 import com.ges.boutique.promo.Promotion;
@@ -9,6 +12,7 @@ import com.ges.boutique.promo.PromotionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,12 +30,60 @@ public class VitrineServiceImpl implements VitrineService {
     private final ProduitRepository produitRepository;
     private final PromotionService promotionService;
     private final BoutiqueService boutiqueService;
+    private final CommandeRepository commandeRepository;
+    private final com.ges.boutique.feature.FeatureToggleService featureToggleService;
+
+    /** Un téléphone garde au plus ce nombre de commandes à suivre (limite les abus). */
+    private static final int MAX_SUIVI = 20;
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<VitrineSuiviDto> suivreCommandes(VitrineSuiviRequest request) {
+        List<VitrineSuiviDto> resultat = new ArrayList<>();
+        String tel = chiffres(request == null ? null : request.getTelephone());
+        if (tel.length() < 6 || request.getNumeros() == null) return resultat;
+
+        request.getNumeros().stream()
+                .filter(n -> n != null && !n.isBlank())
+                .map(String::trim)
+                .distinct()
+                .limit(MAX_SUIVI)
+                .forEach(numero -> commandeRepository
+                        .findFirstByNumeroCommandeAndOrigine(numero, OrigineCommande.VITRINE)
+                        .filter(c -> tel.equals(chiffres(c.getClientTelephone())))
+                        .ifPresent(c -> resultat.add(versSuivi(c))));
+        resultat.sort(Comparator.comparing(VitrineSuiviDto::getDateCommande,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return resultat;
+    }
+
+    private static String chiffres(String s) {
+        return s == null ? "" : s.replaceAll("\\D", "");
+    }
+
+    private VitrineSuiviDto versSuivi(Commande c) {
+        VitrineSuiviDto dto = new VitrineSuiviDto();
+        dto.setNumero(c.getNumeroCommande());
+        dto.setStatut(c.getStatut() == null ? null : c.getStatut().name());
+        dto.setEtapeLivraison(c.getEtapeLivraison() == null ? null : c.getEtapeLivraison().name());
+        dto.setDateCommande(c.getDateCommande());
+        dto.setMontantTotal(c.getMontantTotal());
+        c.getLignes().forEach(l -> {
+            VitrineSuiviDto.Ligne ligne = new VitrineSuiviDto.Ligne();
+            ligne.setNom(l.getProduit() != null ? l.getProduit().getNom() : "Produit");
+            ligne.setQuantite(l.getQuantite());
+            dto.getLignes().add(ligne);
+        });
+        return dto;
+    }
 
     @Override
     public List<VitrineProduitDto> obtenirProduitsVitrine() {
         List<Produit> produits = produitRepository.findAll();
+        boolean photos = featureToggleService.estActive(com.ges.boutique.feature.CleFonctionnalite.IMAGES_PRODUITS);
         return produits.stream()
                 .map(this::versDto)
+                .peek(dto -> { if (!photos) dto.setImageVersion(null); })
                 .collect(Collectors.toList());
     }
 
@@ -52,8 +104,11 @@ public class VitrineServiceImpl implements VitrineService {
         VitrineProduitDto dto = new VitrineProduitDto();
         dto.setId(produit.getId());
         dto.setNom(produit.getNom());
+        dto.setImageVersion(produit.getImageVersion());
         dto.setCategorieNom(produit.getCategorie() != null ? produit.getCategorie().getNom() : null);
-        dto.setPrixVente(produit.getPrixVente());
+        // Vente à la mesure : prix affiché au kg/L/m, comme le client le connaît.
+        dto.setPrixVente(com.ges.boutique.produit.ModeMesure.prixLisible(produit, produit.getPrixVente()));
+        dto.setUnite(produit.getModeMesure() != null ? produit.getModeMesure().getUnite() : null);
         int quantite = produit.getQuantite() != null ? produit.getQuantite() : 0;
         dto.setDisponible(quantite > 0);
         if (quantite <= 0) {

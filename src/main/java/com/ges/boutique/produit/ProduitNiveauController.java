@@ -60,6 +60,10 @@ public class ProduitNiveauController {
             @RequestBody ProduitNiveauRequest request) {
         Produit produit = produitRepository.findById(produitId)
                 .orElseThrow(() -> new RessourceIntrouvableException("Produit non trouvé: " + produitId));
+        if (produit.getModeMesure() != null) {
+            throw new IllegalStateException("Ce produit est vendu au " + produit.getModeMesure().getUnite()
+                    + " : il ne peut pas avoir de niveaux (carton, paquet...).");
+        }
 
         List<ProduitNiveau> existants = niveauRepository.findByProduitIdOrderByOrdreAsc(produitId);
 

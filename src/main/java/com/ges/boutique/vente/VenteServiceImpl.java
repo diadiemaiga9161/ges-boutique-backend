@@ -831,18 +831,25 @@ public class VenteServiceImpl implements VenteService {
 
     @Override
     public List<Map<String, Object>> obtenirTopProduitsParQuantite() {
-        Map<String, Integer> topProduits = new HashMap<>();
+        // Vente à la mesure : quantités en kg (pas en g) pour un classement juste.
+        Map<String, Double> topProduits = new HashMap<>();
+        Map<String, com.ges.boutique.produit.ModeMesure> modes = new HashMap<>();
         for (Vente vente : obtenirToutesVentes()) {
             for (LigneVente ligne : vente.getLignes()) {
                 String produitNom = ligne.getProduitNom();
-                topProduits.merge(produitNom, ligne.getQuantite(), Integer::sum);
+                if (ligne.getProduit() != null && ligne.getProduit().getModeMesure() != null) {
+                    modes.put(produitNom, ligne.getProduit().getModeMesure());
+                }
+                topProduits.merge(produitNom, com.ges.boutique.produit.ModeMesure.qteAffichee(ligne.getProduit(), ligne.getQuantite()), Double::sum);
             }
         }
 
         return topProduits.entrySet().stream()
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                 .limit(10)
-                .map(e -> Map.<String, Object>of("produit", e.getKey(), "quantite", e.getValue()))
+                .map(e -> Map.<String, Object>of("produit", e.getKey(),
+                        "quantite", modes.containsKey(e.getKey()) ? e.getValue() : (Object) Math.round(e.getValue()),
+                        "quantiteTexte", com.ges.boutique.produit.ModeMesure.texteAffiche(modes.get(e.getKey()), e.getValue())))
                 .collect(Collectors.toList());
     }
 

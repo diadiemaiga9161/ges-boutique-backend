@@ -63,6 +63,7 @@ public class VenteMapper {
         dto.setProduitId(ligne.getProduitId());
         dto.setProduitNom(ligne.getProduitNom());
         dto.setQuantite(ligne.getQuantite());
+        dto.setModeMesure(ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
         dto.setPrixUnitaire(ligne.getPrixUnitaire());
         dto.setRemisePourcentage(ligne.getRemisePourcentage());
         dto.setRemiseMontant(ligne.getRemiseMontant());
@@ -129,6 +130,7 @@ public class VenteMapper {
         map.put("produitId", ligne.getProduitId());
         map.put("produitNom", ligne.getProduitNom());
         map.put("quantite", ligne.getQuantite());
+        map.put("modeMesure", ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
         map.put("prixUnitaire", ligne.getPrixUnitaire());
         map.put("prixOriginalProduit", ligne.getPrixOriginalProduit());
         map.put("prixAchat", ligne.getPrixAchat());

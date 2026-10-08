@@ -4,15 +4,17 @@ import com.ges.boutique.commande.Commande;
 import com.ges.boutique.commande.CommandeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Mini-site vitrine automatique — endpoints PUBLICS (sans authentification).
@@ -32,6 +34,7 @@ public class VitrineController {
 
     private final VitrineService vitrineService;
     private final CommandeService commandeService;
+    private final VitrineIconeService iconeService;
 
     @GetMapping("/produits")
     public List<VitrineProduitDto> obtenirProduits() {
@@ -57,29 +60,23 @@ public class VitrineController {
         VitrineInfoDto infos = vitrineService.obtenirInfosVitrine();
         String nom = (infos.getNom() == null || infos.getNom().isBlank()) ? "Boutique" : infos.getNom().trim();
 
+        // Vraies images PNG carrées (voir VitrineIconeService) : un logo en data: URI
+        // rendait la vitrine non installable.
+        String version = iconeService.version();
         List<Map<String, Object>> icones = new ArrayList<>();
-        if (infos.getLogoPath() != null && !infos.getLogoPath().isBlank()) {
-            String type = "image/png";
-            Matcher m = Pattern.compile("^data:([^;]+);").matcher(infos.getLogoPath());
-            if (m.find()) type = m.group(1);
-            for (int taille : new int[]{192, 512}) {
-                Map<String, Object> icone = new HashMap<>();
-                icone.put("src", infos.getLogoPath());
-                icone.put("sizes", taille + "x" + taille);
-                icone.put("type", type);
-                icones.add(icone);
-            }
-        } else {
-            for (int taille : new int[]{192, 512}) {
-                Map<String, Object> icone = new HashMap<>();
-                icone.put("src", "/assets/icons/icon-" + taille + "x" + taille + ".png");
-                icone.put("sizes", taille + "x" + taille);
-                icone.put("type", "image/png");
-                icones.add(icone);
-            }
+        for (int taille : VitrineIconeService.TAILLES) {
+            Map<String, Object> icone = new HashMap<>();
+            icone.put("src", "/api/vitrine/icone/" + taille + "?v=" + version);
+            icone.put("sizes", taille + "x" + taille);
+            icone.put("type", "image/png");
+            icone.put("purpose", "any maskable");
+            icones.add(icone);
         }
 
         Map<String, Object> manifeste = new HashMap<>();
+        // Identifiant propre : le navigateur ne confond jamais la vitrine avec l'appli
+        // du personnel (id "/", page de connexion).
+        manifeste.put("id", "/vitrine");
         manifeste.put("name", nom + " — Boutique en ligne");
         manifeste.put("short_name", nom.length() > 30 ? nom.substring(0, 30) : nom);
         manifeste.put("start_url", "/vitrine");
@@ -91,6 +88,20 @@ public class VitrineController {
         manifeste.put("lang", "fr");
         manifeste.put("icons", icones);
         return manifeste;
+    }
+
+    @GetMapping(value = "/icone/{taille}", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> obtenirIcone(@PathVariable int taille) throws IOException {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(1, TimeUnit.DAYS).cachePublic())
+                .body(iconeService.icone(VitrineIconeService.tailleValide(taille)));
+    }
+
+    /** Suivi sans compte : numéro de commande + téléphone (voir VitrineSuiviRequest). */
+    @PostMapping("/suivi")
+    public List<VitrineSuiviDto> suivreCommandes(@RequestBody VitrineSuiviRequest request) {
+        return vitrineService.suivreCommandes(request);
     }
 
     @PostMapping("/commande")

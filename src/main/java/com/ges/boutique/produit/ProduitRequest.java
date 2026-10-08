@@ -24,4 +24,6 @@ public class ProduitRequest {
     private boolean bio;
     private String origine;
     private String typeVente; // "DETAIL" ou "ENGROS"
+    /** Création seulement : produit vendu au kg/L/m (valeurs déjà en petite unité). */
+    private ModeMesure modeMesure;
 }

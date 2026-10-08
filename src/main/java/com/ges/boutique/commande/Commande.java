@@ -111,6 +111,14 @@ public class Commande {
     @Column(name = "chauffeur_telephone")
     private String chauffeurTelephone;
 
+    /** Après confirmation : Prête puis Livrée (voir EtapeLivraison). null = pas encore prête. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "etape_livraison", length = 20)
+    private EtapeLivraison etapeLivraison;
+
+    @Column(name = "date_etape_livraison")
+    private LocalDateTime dateEtapeLivraison;
+
     @PrePersist
     protected void onCreate() {
         dateCommande = LocalDateTime.now();

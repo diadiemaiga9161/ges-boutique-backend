@@ -287,6 +287,17 @@ public class DetteAncienneController {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
+    // Refus d'un rôle personnalisé (PermissionInterceptor) : sans ce handler, le
+    // handler générique ci-dessous (local, donc prioritaire) le changeait en erreur 500.
+    @ExceptionHandler(com.ges.boutique.exception.PermissionRefuseeException.class)
+    public ResponseEntity<Map<String, Object>> handlePermissionRefusee(com.ges.boutique.exception.PermissionRefuseeException e) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("error", e.getMessage());
+        response.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception e) {
         Map<String, Object> response = new HashMap<>();

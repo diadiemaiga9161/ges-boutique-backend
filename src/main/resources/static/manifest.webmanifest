@@ -2,6 +2,7 @@
   "name": "Ges Lafia",
   "short_name": "GesLafia",
   "description": "Ges Lafia — Gestion de boutique : ventes, stocks, clients, caisse",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#081648",

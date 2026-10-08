@@ -29,7 +29,8 @@ public class CacheConfig {
                 "inventaire",
                 "boutiques-partenaires",
                 "fonctionnalites",
-                "permissionsVendeur"
+                "permissionsVendeur",
+                "rolesBoutique"
         );
         manager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(500)

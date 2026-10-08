@@ -1,5 +1,6 @@
 package com.ges.boutique.client;
 
+import com.ges.boutique.commande.CommandeService;
 import com.ges.boutique.email.QrCodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class ClientController {
     private final ClientReleveService clientReleveService;
     private final ClientReleveApiService clientReleveApiService;
     private final QrCodeService qrCodeService;
+    private final CommandeService commandeService;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -95,6 +97,17 @@ public class ClientController {
         response.put("success", false);
         response.put("message", "Client non trouvé");
         return ResponseEntity.status(404).body(response);
+    }
+
+    /** Ids des clients ayant déjà commandé depuis le portail (badge + filtre de la liste).
+     *  À part de la liste elle-même : son contenu reste exactement le même qu'avant. */
+    @GetMapping("/portail-ids")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
+    public ResponseEntity<Map<String, Object>> clientsDuPortail() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("clientIds", commandeService.clientsAyantCommandeEnLigne());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping

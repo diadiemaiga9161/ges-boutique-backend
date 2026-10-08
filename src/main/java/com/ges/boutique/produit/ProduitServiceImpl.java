@@ -5,6 +5,7 @@ import com.ges.boutique.journalaudit.JournalAuditService;
 import com.ges.boutique.journalaudit.TypeActionAudit;
 import com.ges.boutique.notification.NotificationPersistanceService;
 import com.ges.boutique.exception.RessourceIntrouvableException;
+import com.ges.boutique.feature.CleFonctionnalite;
 import com.ges.boutique.fournisseur.Fournisseur;
 import com.ges.boutique.fournisseur.FournisseurDto;
 import com.ges.boutique.fournisseur.FournisseurRepository;
@@ -38,6 +39,8 @@ public class ProduitServiceImpl implements ProduitService {
     private final NotificationService notificationService;
     private final NotificationPersistanceService notifPersistance;
     private final JournalAuditService journalAuditService;
+    private final ProduitImageRepository produitImageRepository;
+    private final com.ges.boutique.feature.FeatureToggleService featureToggleService;
 
     @Override
     @Transactional
@@ -71,6 +74,11 @@ public class ProduitServiceImpl implements ProduitService {
         produit.setBio(request.isBio());
         produit.setOrigine(request.getOrigine());
         produit.setTypeVente(request.getTypeVente() != null ? request.getTypeVente() : "DETAIL");
+        // Vente à la mesure : seulement si le super admin l'a activée pour la boutique.
+        if (request.getModeMesure() != null && featureToggleService.estActive(CleFonctionnalite.VENTE_A_LA_MESURE)) {
+            produit.setModeMesure(request.getModeMesure());
+            produit.setUniteBase(request.getModeMesure().getPetiteUnite());
+        }
 
         if (request.getFournisseurId() != null) {
             Fournisseur fournisseur = fournisseurRepository.findById(request.getFournisseurId())
@@ -251,6 +259,8 @@ public class ProduitServiceImpl implements ProduitService {
             throw new IllegalStateException("Impossible de supprimer un produit deja utilise dans des ventes");
         }
         notificationService.notifierMiseAJourDashboard();
+        // Photo éventuelle (fonctionnalité IMAGES_PRODUITS) : supprimée avec le produit.
+        produitImageRepository.deleteByProduitId(id);
         produitRepository.delete(produit);
     }
 
@@ -562,6 +572,8 @@ public class ProduitServiceImpl implements ProduitService {
         dto.setBio(produit.isBio());
         dto.setOrigine(produit.getOrigine());
         dto.setTypeVente(produit.getTypeVente());
+        dto.setImageVersion(produit.getImageVersion());
+        dto.setModeMesure(produit.getModeMesure());
 
         dto.setStockFaible(produit.estStockFaible());
         dto.setPerime(produit.estPerime());

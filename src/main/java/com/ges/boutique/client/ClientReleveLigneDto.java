@@ -35,6 +35,8 @@ public class ClientReleveLigneDto {
 
     private String produitNom;  // uniquement pour VENTE
     private Integer quantite;   // uniquement pour VENTE
+    /** Quantité lisible ("3" ou "1,25 kg" pour un produit vendu à la mesure). */
+    private String quantiteTexte;
     private Double prixUnitaire; // uniquement pour VENTE
 
     private Double montantVente;       // uniquement sur la 1ère ligne produit d'une vente
@@ -65,5 +67,13 @@ public class ClientReleveLigneDto {
         private String produitNom;
         private Integer quantite;
         private Double prixUnitaire;
+        /** Quantité lisible ("3" ou "1,8 kg" pour un produit vendu à la mesure). */
+        private String quantiteTexte;
+
+        public ProduitVendu(String produitNom, Integer quantite, Double prixUnitaire) {
+            this.produitNom = produitNom;
+            this.quantite = quantite;
+            this.prixUnitaire = prixUnitaire;
+        }
     }
 }

@@ -1,17 +1,17 @@
 {
   "$schema": "./node_modules/@angular/service-worker/config/schema.json",
-  "index": "/mobile/index.html",
+  "index": "/index.html",
   "assetGroups": [
     {
       "name": "app-shell",
       "installMode": "prefetch",
       "resources": {
         "files": [
-          "/mobile/favicon.ico",
-          "/mobile/index.html",
-          "/mobile/manifest.webmanifest",
-          "/mobile/*.css",
-          "/mobile/*.js"
+          "/favicon.ico",
+          "/index.html",
+          "/manifest.webmanifest",
+          "/*.css",
+          "/*.js"
         ]
       }
     },
@@ -21,9 +21,9 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/mobile/assets/**",
-          "/mobile/svg/**",
-          "/mobile/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
+          "/assets/**",
+          "/svg/**",
+          "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
         ]
       }
     }

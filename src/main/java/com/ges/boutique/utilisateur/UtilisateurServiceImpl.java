@@ -42,6 +42,8 @@ public class UtilisateurServiceImpl implements UtilisateurService {
         // (DataInitializer) ou un accès direct à la base peut l'obtenir, pour qu'un
         // admin classique ne puisse pas se l'auto-attribuer en le glissant dans le JSON.
         utilisateur.setSuperAdmin(false);
+        // Le rôle personnalisé s'attribue ensuite via PUT /api/roles/utilisateurs/{id}.
+        utilisateur.setRoleBoutiqueId(null);
         // VENDEUR par défaut si le formulaire ne précise pas de rôle (le champ n'a plus
         // de valeur par défaut sur l'entité elle-même — voir Utilisateur.java).
         if (utilisateur.getRole() == null) {
@@ -76,13 +78,20 @@ public class UtilisateurServiceImpl implements UtilisateurService {
         if (utilisateurDetails.getTelephone() != null) {
             utilisateur.setTelephone(utilisateurDetails.getTelephone());
         }
-        if (utilisateurDetails.getPassword() != null) {
+        // Mot de passe vide = « ne pas changer » : les formulaires de modification envoient ""
+        // quand la case est laissée vide (sinon la personne ne pouvait plus se connecter).
+        if (utilisateurDetails.getPassword() != null && !utilisateurDetails.getPassword().isBlank()) {
             utilisateur.setPassword(passwordEncoder.encode(utilisateurDetails.getPassword()));
         }
         RoleUtilisateur ancienRole = utilisateur.getRole();
         boolean roleChange = utilisateurDetails.getRole() != null && utilisateurDetails.getRole() != ancienRole;
         if (utilisateurDetails.getRole() != null) {
             utilisateur.setRole(utilisateurDetails.getRole());
+        }
+        // Un rôle personnalisé dépend du rôle de base : s'il change, on revient au rôle
+        // système (Gérant/Vendeur) plutôt que de garder un rôle devenu incohérent.
+        if (roleChange) {
+            utilisateur.setRoleBoutiqueId(null);
         }
         // NB: "actif" n'est volontairement pas repris ici — c'est un booléen primitif
         // (jamais absent du JSON désérialisé, toujours true ou false), donc l'appliquer

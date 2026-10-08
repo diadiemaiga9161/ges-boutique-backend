@@ -205,8 +205,10 @@ public class PdfFactureService {
                         : (ligne.getProduit() != null ? ligne.getProduit().getNom() : "-");
 
                 addCellTableau(tableau, designation, bg, Element.ALIGN_LEFT);
-                addCellTableau(tableau, String.valueOf(ligne.getQuantite()), bg, Element.ALIGN_CENTER);
-                addCellTableau(tableau, nf.format(ligne.getPrixUnitaire()) + " F", bg, Element.ALIGN_RIGHT);
+                // Vente à la mesure : "1,25 kg" et "600 F/kg" plutôt que 1250 et 0,6 F.
+                addCellTableau(tableau, com.ges.boutique.produit.ModeMesure.quantiteLisible(ligne.getProduit(), ligne.getQuantite()), bg, Element.ALIGN_CENTER);
+                addCellTableau(tableau, nf.format(com.ges.boutique.produit.ModeMesure.prixLisible(ligne.getProduit(), ligne.getPrixUnitaire())) + " F"
+                        + com.ges.boutique.produit.ModeMesure.suffixePrix(ligne.getProduit()), bg, Element.ALIGN_RIGHT);
                 addCellTableau(tableau, nf.format(ligne.getMontantRemise() != null ? ligne.getMontantRemise() : 0) + " F", bg, Element.ALIGN_RIGHT);
                 addCellTableau(tableau, nf.format(ligne.getSousTotal() != null ? ligne.getSousTotal() : 0) + " F", bg, Element.ALIGN_RIGHT);
             }

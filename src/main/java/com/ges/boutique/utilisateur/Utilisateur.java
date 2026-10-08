@@ -74,6 +74,12 @@ public class Utilisateur implements UserDetails {
     @Column(name = "super_admin", columnDefinition = "TINYINT(1) DEFAULT 0")
     private boolean superAdmin = false;
 
+    // Rôle personnalisé (Caissier, Magasinier...) — voir com.ges.boutique.role. Null = rôle
+    // système correspondant à "role" (Gérant ou Vendeur). Ne se modifie que via
+    // PUT /api/roles/utilisateurs/{id}, jamais via le formulaire utilisateur classique.
+    @Column(name = "role_boutique_id")
+    private Long roleBoutiqueId;
+
     @PrePersist
     protected void onCreate() {
         dateCreation = LocalDateTime.now();

@@ -19,6 +19,8 @@ public class VitrineProduitDto {
     private String nom;
     private String categorieNom;
     private Double prixVente;
+    /** Vente à la mesure : "kg", "L" ou "m" (prix alors exprimé par cette unité), sinon null. */
+    private String unite;
     private boolean disponible;
 
     /** DISPONIBLE / STOCK_FAIBLE / RUPTURE — statut affiché au client, jamais la quantité exacte. */
@@ -27,4 +29,7 @@ public class VitrineProduitDto {
     private boolean enPromotion;
     private String promotionTitre;
     private String promotionReduction;
+    /** Version de la photo (null = pas de photo, ou photos désactivées) : l'image se lit sur
+     *  /api/public/produits/{id}/image?taille=mini&v=... (publique, cache longue durée). */
+    private Long imageVersion;
 }

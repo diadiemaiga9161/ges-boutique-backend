@@ -23,14 +23,20 @@ public class InventaireController {
     // accès, le vendeur seulement si l'admin de la boutique lui a accordé la permission
     // CleVendeur.INVENTAIRE_LECTURE (voir com.ges.boutique.permission — décision normale
     // de la boutique, sans rapport avec le super admin). Les 3 endpoints d'écriture plus
-    // bas (entrée/sortie/ajustement) restent volontairement réservés à l'ADMIN seul.
+    // bas (entrée/sortie/ajustement) suivent MOUVEMENT_AUTORISE.
     private static final String LECTURE_AUTORISEE =
-            "hasRole('ADMIN') or (hasRole('VENDEUR') and @permissionVendeurService.estActive(T(com.ges.boutique.permission.CleVendeur).INVENTAIRE_LECTURE))";
+            "hasRole('ADMIN') or (hasRole('VENDEUR') and (@permissionVendeurService.estActive(T(com.ges.boutique.permission.CleVendeur).INVENTAIRE_LECTURE)"
+            + " or @roleBoutiqueService.vendeurPeut(authentication.principal, 'STOCK_GERER')))";
+
+    // Entrées / sorties / ajustements : le gérant, ou un vendeur dont le rôle (Vendeur ou rôle
+    // créé, rôles personnalisés activés) a « Inventaire » sur Modifier ou Tout.
+    private static final String MOUVEMENT_AUTORISE =
+            "hasRole('ADMIN') or (hasRole('VENDEUR') and @roleBoutiqueService.vendeurPeut(authentication.principal, 'STOCK_GERER'))";
 
     private final InventaireService inventaireService;
 
     @PostMapping("/entree")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(MOUVEMENT_AUTORISE)
     @Operation(summary = "Enregistrer une entrée de stock")
     public ResponseEntity<Void> entreeStock(@RequestBody Map<String, Object> request) {
         Long produitId = Long.valueOf(request.get("produitId").toString());
@@ -56,7 +62,7 @@ public class InventaireController {
     }
 
     @PostMapping("/sortie")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(MOUVEMENT_AUTORISE)
     @Operation(summary = "Enregistrer une sortie de stock")
     public ResponseEntity<Void> sortieStock(@RequestBody Map<String, Object> request) {
         Long produitId = Long.valueOf(request.get("produitId").toString());
@@ -71,7 +77,7 @@ public class InventaireController {
     }
 
     @PostMapping("/ajustement")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize(MOUVEMENT_AUTORISE)
     @Operation(summary = "Ajuster le stock")
     public ResponseEntity<Void> ajusterStock(@RequestBody Map<String, Object> request) {
         Long produitId = Long.valueOf(request.get("produitId").toString());

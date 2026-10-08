@@ -291,7 +291,9 @@ public class CommandeServiceImpl implements CommandeService {
             LigneCommande ligne = new LigneCommande();
             ligne.setCommande(commande);
             ligne.setProduit(produit);
-            ligne.setQuantite(lr.getQuantite());
+            // Vente à la mesure : le client de la vitrine commande en kg/L/m entiers.
+            ligne.setQuantite(produit.getModeMesure() != null
+                    ? lr.getQuantite() * produit.getModeMesure().getFacteur() : lr.getQuantite());
             ligne.setPrixUnitaire(produit.getPrixVente());
             ligne.setPrixAchat(produit.getPrixAchat());
             ligne.calculer();
@@ -327,6 +329,25 @@ public class CommandeServiceImpl implements CommandeService {
     public List<Commande> trouverVitrineEnAttente() {
         return commandeRepository.findByOrigineAndStatutOrderByDateCommandeDesc(
                 OrigineCommande.VITRINE, StatutCommande.BROUILLON);
+    }
+
+    @Override
+    @Transactional
+    public Commande changerEtapeLivraison(Long id, EtapeLivraison etape) {
+        Commande c = commandeRepository.findById(id)
+                .orElseThrow(() -> new RessourceIntrouvableException("Commande introuvable"));
+        if (c.getStatut() != StatutCommande.VALIDEE) {
+            throw new IllegalStateException("Confirmez d'abord la commande avant de la marquer prête ou livrée.");
+        }
+        c.setEtapeLivraison(etape);
+        c.setDateEtapeLivraison(etape == null ? null : LocalDateTime.now());
+        return commandeRepository.save(c);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> clientsAyantCommandeEnLigne() {
+        return commandeRepository.findClientIdsByOrigine(OrigineCommande.VITRINE);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

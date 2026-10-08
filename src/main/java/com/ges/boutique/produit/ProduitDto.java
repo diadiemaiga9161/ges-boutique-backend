@@ -27,6 +27,8 @@ public class ProduitDto {
     private boolean bio;
     private String origine;
     private String typeVente;
+    private Long imageVersion;
+    private ModeMesure modeMesure;
     private boolean stockFaible;
     private boolean perime;
     private boolean prochePeremption;

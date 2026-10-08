@@ -48,6 +48,8 @@ public class ProduitController {
             map.put("description", p.getDescription());
             map.put("prixAchat", p.getPrixAchat());
             map.put("prixVente", p.getPrixVente());
+            map.put("imageVersion", p.getImageVersion());
+            map.put("modeMesure", p.getModeMesure());
             map.put("quantite", p.getQuantite());
             map.put("seuilAlerte", p.getSeuilAlerte());
             map.put("codeBarre", p.getCodeBarre());
@@ -176,6 +178,8 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("prixAchat", p.getPrixAchat());
             map.put("prixVente", p.getPrixVente());
+            map.put("imageVersion", p.getImageVersion());
+            map.put("modeMesure", p.getModeMesure());
             map.put("quantite", p.getQuantite());
             map.put("uniteMesure", p.getUniteMesure());
             map.put("seuilAlerte", p.getSeuilAlerte());
@@ -220,6 +224,8 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("prixAchat", p.getPrixAchat());
             map.put("prixVente", p.getPrixVente());
+            map.put("imageVersion", p.getImageVersion());
+            map.put("modeMesure", p.getModeMesure());
             map.put("quantite", p.getQuantite());
             map.put("uniteMesure", p.getUniteMesure());
             map.put("seuilAlerte", p.getSeuilAlerte());
@@ -256,6 +262,8 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("prixAchat", p.getPrixAchat());
             map.put("prixVente", p.getPrixVente());
+            map.put("imageVersion", p.getImageVersion());
+            map.put("modeMesure", p.getModeMesure());
             map.put("quantite", p.getQuantite());
             map.put("uniteMesure", p.getUniteMesure());
 
@@ -296,6 +304,7 @@ public class ProduitController {
             map.put("id", p.getId());
             map.put("nom", p.getNom());
             map.put("quantite", p.getQuantite());
+            map.put("modeMesure", p.getModeMesure());
             map.put("seuilAlerte", p.getSeuilAlerte());
             map.put("uniteMesure", p.getUniteMesure());
             map.put("datePeremption", p.getDatePeremption() != null ? p.getDatePeremption().toString() : null);
@@ -331,6 +340,7 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("datePeremption", p.getDatePeremption() != null ? p.getDatePeremption().toString() : null);
             map.put("quantite", p.getQuantite());
+            map.put("modeMesure", p.getModeMesure());
             map.put("uniteMesure", p.getUniteMesure());
 
             Map<String, Object> catMap = new HashMap<>();
@@ -352,7 +362,9 @@ public class ProduitController {
     }
 
     @GetMapping("/proche-peremption")
-    @PreAuthorize("hasRole('ADMIN')")
+    // Lu par la page Inventaire : même règle que l'inventaire (vendeur avec « Consultation
+    // de l'inventaire » accordée par le gérant).
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('VENDEUR') and (@permissionVendeurService.estActive(T(com.ges.boutique.permission.CleVendeur).INVENTAIRE_LECTURE) or @roleBoutiqueService.vendeurPeut(authentication.principal, 'STOCK_GERER')))")
     @Operation(summary = "Obtenir les produits proches de péremption")
     public ResponseEntity<List<Map<String, Object>>> obtenirProduitsProchePeremption(
             @RequestParam(defaultValue = "7") int jours) {
@@ -365,6 +377,7 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("datePeremption", p.getDatePeremption() != null ? p.getDatePeremption().toString() : null);
             map.put("quantite", p.getQuantite());
+            map.put("modeMesure", p.getModeMesure());
             map.put("uniteMesure", p.getUniteMesure());
 
             Map<String, Object> catMap = new HashMap<>();
@@ -378,7 +391,9 @@ public class ProduitController {
     }
 
     @GetMapping("/proche-peremption/dto")
-    @PreAuthorize("hasRole('ADMIN')")
+    // Lu par la page Inventaire : même règle que l'inventaire (vendeur avec « Consultation
+    // de l'inventaire » accordée par le gérant).
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('VENDEUR') and (@permissionVendeurService.estActive(T(com.ges.boutique.permission.CleVendeur).INVENTAIRE_LECTURE) or @roleBoutiqueService.vendeurPeut(authentication.principal, 'STOCK_GERER')))")
     @Operation(summary = "Obtenir les produits proches de péremption au format DTO")
     public ResponseEntity<List<ProduitDto>> obtenirProduitsProchePeremptionDto(
             @RequestParam(defaultValue = "7") int jours) {
@@ -399,6 +414,8 @@ public class ProduitController {
             map.put("nom", p.getNom());
             map.put("bio", p.isBio());
             map.put("prixVente", p.getPrixVente());
+            map.put("imageVersion", p.getImageVersion());
+            map.put("modeMesure", p.getModeMesure());
             map.put("quantite", p.getQuantite());
             map.put("uniteMesure", p.getUniteMesure());
 
@@ -430,6 +447,8 @@ public class ProduitController {
         map.put("nom", p.getNom());
         map.put("prixAchat", p.getPrixAchat());
         map.put("prixVente", p.getPrixVente());
+        map.put("imageVersion", p.getImageVersion());
+        map.put("modeMesure", p.getModeMesure());
         map.put("quantite", p.getQuantite());
         map.put("uniteMesure", p.getUniteMesure());
         map.put("codeBarre", p.getCodeBarre());

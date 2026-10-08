@@ -1,4 +1,5 @@
 {
+  "FIDELITE": {"TITLE":"Fidélité","LOADING":"Chargement des points…","CLIENT_SOLDE":"Ce client a {{points}} points, soit {{valeur}}","POINTS_LABEL":"points","REDUCTION":"Réduction fidélité","REDUCTION_HINT":"Réduction de {{montant}} appliquée à la validation","CLIENT_BALANCE":"Solde de points","CLIENT_BALANCE_VALUE":"Valeur des points","ADJUST_TITLE":"Ajuster les points","ADJUST_DELTA":"Points à ajouter ou retirer (ex. 10 ou -5)","ADJUST_MOTIF":"Motif","ADJUST_BUTTON":"Ajuster","HISTORY_TITLE":"Historique des points","HISTORY_EMPTY":"Aucun mouvement de points","VENTE_REF":"Vente","SETTINGS_TITLE":"Programme de fidélité","SETTINGS_DESC":"Les clients gagnent des points à chaque achat et les utilisent comme réduction.","AMOUNT_PER_POINT":"Montant d'achat pour 1 point (FCFA)","POINT_VALUE":"Valeur d'un point (FCFA)"},
   "LANG": {
     "SELECT": "Langue",
     "FR": "Français",
@@ -57,6 +58,8 @@
     "INACTIVE": "Inactif"
   },
   "NAV": {
+    "HOME": "Accueil",
+    "MENU": "Menu",
     "PRODUCTS": "Produits",
     "SALES": "Ventes",
     "CLIENTS": "Clients",
@@ -89,7 +92,7 @@
     "NOTIFICATIONS": "Notifications",
     "ORDERS": "Commandes"
   },
-  "PROFILE": {
+  "PROFILE": { "APPEARANCE": "Apparence", "THEME_LIGHT": "Clair", "THEME_DARK": "Sombre", "THEME_AUTO": "Auto",
     "TITLE": "Mon Profil",
     "FULL_NAME": "Nom complet",
     "EMAIL": "Email",
@@ -108,6 +111,13 @@
     "VOICE_CONFIRM_DESC": "Le téléphone annonce à voix haute le total après chaque vente validée"
   },
   "PRODUCTS": {
+    "STOCK_OK": "OK",
+    "STOCK_LOW_SHORT": "Bas",
+    "STOCK_OUT_SHORT": "Rupture",
+    "ALERTS_TITLE": "Alertes stock",
+    "ALERTS_OUT_COUNT": "{{count}} rupture(s)",
+    "ALERTS_LOW_COUNT": "{{count}} stock faible",
+    "ALERT_IMMINENT": "Rupture imminente",
     "TITLE": "Produits",
     "ADD": "Nouveau produit",
     "NAME": "Nom du produit *",
@@ -212,7 +222,7 @@
     "ANNULEUR": "Annulé par",
     "VENDEUR": "Vendeur"
   },
-  "CLIENTS": {
+  "CLIENTS": { "EMPTY": "Aucun client trouvé",
     "TITLE": "Clients",
     "ADD": "Nouveau client",
     "NAME": "Nom",
@@ -231,7 +241,34 @@
     "NO_RESULTS": "Aucun résultat"
   },
   "RELEVE": {
-    "BUTTON": "Relevé"
+    "BUTTON": "Relevé",
+    "TITLE": "Situation client",
+    "TOTAL_SALES": "Total ventes",
+    "TOTAL_PAYMENTS": "Total versé",
+    "BALANCE": "Solde actuel",
+    "PERIOD_TODAY": "Aujourd'hui",
+    "PERIOD_YESTERDAY": "Hier",
+    "PERIOD_WEEK": "Cette semaine",
+    "PERIOD_MONTH": "Ce mois",
+    "PERIOD_YEAR": "Cette année",
+    "PERIOD_CUSTOM": "Personnalisé",
+    "PERIOD_ALL": "Tout",
+    "FROM_DATE": "Du",
+    "TO_DATE": "Au",
+    "APPLY": "Appliquer",
+    "TYPE_ALL": "Toutes les opérations",
+    "TYPE_SALES": "Ventes uniquement",
+    "TYPE_PAYMENTS": "Versements uniquement",
+    "EMPTY": "Aucun mouvement pour cette période",
+    "SALE_AMOUNT": "Montant vente",
+    "PAYMENT_AMOUNT": "Montant versé",
+    "BALANCE_AFTER": "Reste à payer",
+    "PREVIOUS": "Précédent",
+    "NEXT": "Suivant",
+    "PAGE": "Page",
+    "OF": "sur",
+    "SHOW_SALES": "Voir les {{count}} ventes",
+    "HIDE_SALES": "Masquer les ventes"
   },
   "CAISSE": {
     "TITLE": "Caisse",
@@ -607,6 +644,21 @@
     "CREDITS": "crédits",
     "VENTES": "ventes",
     "ACCES_REFUSE": "Accès réservé aux administrateurs"
+  },
+  "PARAMETRES_HUB": {
+    "SECTION_APPARENCE": "Apparence",
+    "ITEM_APPARENCE": "Thème & apparence",
+    "SECTION_LANGUE": "Langue",
+    "ITEM_LANGUE": "Langue",
+    "SECTION_NOTIFICATIONS": "Notifications",
+    "ITEM_NOTIFICATIONS": "Notifications",
+    "SECTION_BOUTIQUE": "Boutique",
+    "ITEM_BOUTIQUE_INFO": "Informations boutique",
+    "ITEM_FACTURE_DESIGN": "Modèle de facture",
+    "ITEM_EXPORT": "Export des données",
+    "ITEM_JOURNAL_AUDIT": "Journal d'audit",
+    "ITEM_SAUVEGARDES": "Sauvegardes",
+    "ITEM_REINIT": "Réinitialisation des données"
   },
   "EXPORT": {
     "TITRE": "Export de données",

@@ -281,7 +281,9 @@ public class ClientReleveApiService {
             ClientReleveLigneDto dto = ligneBaseVente(v);
             dto.setProduitNom(lv.getProduitNom());
             dto.setQuantite(lv.getQuantite());
-            dto.setPrixUnitaire(lv.getPrixUnitaire());
+            dto.setQuantiteTexte(com.ges.boutique.produit.ModeMesure.quantiteLisible(lv.getProduit(), lv.getQuantite()));
+            // Relevé = affichage seulement : prix tel que le client le connaît (au kg pour la mesure).
+            dto.setPrixUnitaire(com.ges.boutique.produit.ModeMesure.prixLisible(lv.getProduit(), lv.getPrixUnitaire()));
             if (premiere) {
                 dto.setMontantVente(arrondir(m.montantVente));
                 dto.setResteAPayerApres(arrondir(m.resteAPayerApres));
@@ -366,8 +368,11 @@ public class ClientReleveApiService {
                 vr.setDateVente(vente.getDateVente());
                 if (ventesParId.containsKey(venteId) && vente.getLignes() != null) {
                     for (LigneVente lv : vente.getLignes()) {
+                        // Vente à la mesure : quantité lisible et prix au kg (affichage seulement).
                         vr.getProduits().add(new ClientReleveLigneDto.ProduitVendu(
-                                lv.getProduitNom(), lv.getQuantite(), lv.getPrixUnitaire()));
+                                lv.getProduitNom(), lv.getQuantite(),
+                                com.ges.boutique.produit.ModeMesure.prixLisible(lv.getProduit(), lv.getPrixUnitaire()),
+                                com.ges.boutique.produit.ModeMesure.quantiteLisible(lv.getProduit(), lv.getQuantite())));
                     }
                 }
             }

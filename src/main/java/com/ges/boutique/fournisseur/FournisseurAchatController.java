@@ -63,6 +63,7 @@ public class FournisseurAchatController {
                     Map<String, Object> ligneMap = new HashMap<>();
                     ligneMap.put("id", ligne.getId());
                     ligneMap.put("quantite", ligne.getQuantite());
+                    ligneMap.put("modeMesure", ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
                     ligneMap.put("prixAchatUnitaire", ligne.getPrixAchatUnitaire());
                     ligneMap.put("sousTotal", ligne.getSousTotal());
 
@@ -150,6 +151,7 @@ public class FournisseurAchatController {
                             .map(ligne -> {
                                 Map<String, Object> ligneMap = new HashMap<>();
                                 ligneMap.put("quantite", ligne.getQuantite());
+                                ligneMap.put("modeMesure", ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
                                 ligneMap.put("prixAchatUnitaire", ligne.getPrixAchatUnitaire());
                                 ligneMap.put("sousTotal", ligne.getSousTotal());
                                 if (ligne.getProduit() != null) {
@@ -195,6 +197,7 @@ public class FournisseurAchatController {
                             .map(ligne -> {
                                 Map<String, Object> ligneMap = new HashMap<>();
                                 ligneMap.put("quantite", ligne.getQuantite());
+                                ligneMap.put("modeMesure", ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
                                 ligneMap.put("prixAchatUnitaire", ligne.getPrixAchatUnitaire());
                                 ligneMap.put("sousTotal", ligne.getSousTotal());
                                 if (ligne.getProduit() != null) {
@@ -276,6 +279,7 @@ public class FournisseurAchatController {
                     Map<String, Object> ligneMap = new HashMap<>();
                     ligneMap.put("id", ligne.getId());
                     ligneMap.put("quantite", ligne.getQuantite());
+                    ligneMap.put("modeMesure", ligne.getProduit() != null ? ligne.getProduit().getModeMesure() : null);
                     ligneMap.put("prixAchatUnitaire", ligne.getPrixAchatUnitaire());
                     ligneMap.put("sousTotal", ligne.getSousTotal());
                     if (ligne.getProduit() != null) {
@@ -340,6 +344,7 @@ public class FournisseurAchatController {
                     map.put("prixAchat", p.getPrixAchat());
                     map.put("prixVente", p.getPrixVente());
                     map.put("quantite", p.getQuantite());
+                    map.put("modeMesure", p.getModeMesure());
                     return map;
                 })
                 .collect(Collectors.toList());

@@ -24,6 +24,10 @@ public class UniteVenteServiceImpl implements UniteVenteService {
     public UniteVente creer(Long produitId, UniteVenteRequest request) {
         Produit produit = produitRepository.findById(produitId)
                 .orElseThrow(() -> new RessourceIntrouvableException("Produit non trouvé: " + produitId));
+        if (produit.getModeMesure() != null) {
+            throw new IllegalStateException("Ce produit est vendu au " + produit.getModeMesure().getUnite()
+                    + " : il ne peut pas avoir d'unités de vente.");
+        }
 
         if (request.getNom() == null || request.getNom().isBlank()) {
             throw new IllegalArgumentException("Le nom de l'unité est requis");

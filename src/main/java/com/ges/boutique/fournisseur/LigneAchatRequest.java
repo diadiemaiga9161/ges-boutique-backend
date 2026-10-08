@@ -1,7 +1,10 @@
 package com.ges.boutique.fournisseur;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
+// Les écrans peuvent joindre des infos d'affichage (ex : modeMesure) : on les ignore.
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Data
 public class LigneAchatRequest {
     // Pour produit existant

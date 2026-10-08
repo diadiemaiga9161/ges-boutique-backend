@@ -108,6 +108,22 @@ public class Produit {
     @Column(name = "type_vente")
     private String typeVente; // "DETAIL" ou "ENGROS"
 
+    // Photo du produit (fonctionnalité IMAGES_PRODUITS) : la photo elle-même vit dans
+    // produit_image pour garder la liste des produits légère ; ici seulement un numéro de
+    // version (null = pas de photo) qui sert à construire l'URL et à rafraîchir le cache.
+    // Mis à jour par requête directe (ProduitRepository.definirImageVersion) pour ne pas
+    // incrémenter le verrou optimiste @Version utilisé par le stock.
+    @Column(name = "image_version")
+    private Long imageVersion;
+
+    // Vente à la mesure (kg, L, m) — voir ModeMesure. Null = produit compté à l'unité
+    // (tous les produits existants). Quand renseigné, quantite/seuilAlerte sont en petite
+    // unité (g, ml, cm) et prixAchat/prixVente PAR petite unité. Ne change que via
+    // ProduitService.changerModeMesure (qui convertit le stock) ou à la création.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode_mesure", columnDefinition = "VARCHAR(5)")
+    private ModeMesure modeMesure;
+
     @OneToMany(mappedBy = "produit", fetch = FetchType.LAZY)
     @JsonIgnore // Ignorer complètement la collection lors de la sérialisation JSON
     private List<LigneVente> lignesVente = new ArrayList<>();

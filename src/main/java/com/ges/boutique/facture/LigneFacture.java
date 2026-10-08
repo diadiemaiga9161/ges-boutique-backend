@@ -144,4 +144,10 @@ public class LigneFacture {
             calculerSousTotal();
         }
     }
+
+    /** Vente à la mesure : unité du produit (kg, L, m) pour afficher "1,25 kg", sinon null. */
+    @com.fasterxml.jackson.annotation.JsonProperty("modeMesure")
+    public com.ges.boutique.produit.ModeMesure getModeMesure() {
+        return produit != null ? produit.getModeMesure() : null;
+    }
 }

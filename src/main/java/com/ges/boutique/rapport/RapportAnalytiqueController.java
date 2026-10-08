@@ -74,6 +74,8 @@ public class RapportAnalytiqueController {
 
         // Agréger par nom de produit
         Map<String, double[]> agreg = new LinkedHashMap<>(); // [quantite, ca, prixAchat]
+        // Vente à la mesure : quantités en kg (pas en g) pour un classement juste.
+        Map<String, com.ges.boutique.produit.ModeMesure> modes = new HashMap<>();
         for (Vente v : ventes) {
             if (v.getAnnulee() != null && v.getAnnulee()) continue;
             if (v.getLignes() == null) continue;
@@ -81,7 +83,8 @@ public class RapportAnalytiqueController {
                 String nom = l.getProduitNom() != null ? l.getProduitNom() :
                     (l.getProduit() != null ? l.getProduit().getNom() : "?");
                 agreg.computeIfAbsent(nom, k -> new double[3]);
-                agreg.get(nom)[0] += l.getQuantite() != null ? l.getQuantite() : 0;
+                if (l.getProduit() != null && l.getProduit().getModeMesure() != null) modes.put(nom, l.getProduit().getModeMesure());
+                agreg.get(nom)[0] += com.ges.boutique.produit.ModeMesure.qteAffichee(l.getProduit(), l.getQuantite());
                 agreg.get(nom)[1] += l.getSousTotal() != null ? l.getSousTotal() : 0;
                 agreg.get(nom)[2] += (l.getPrixAchat() != null ? l.getPrixAchat() : 0)
                     * (l.getQuantite() != null ? l.getQuantite() : 0);
@@ -95,6 +98,7 @@ public class RapportAnalytiqueController {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("produitNom", e.getKey());
                 m.put("quantiteVendue", (long) e.getValue()[0]);
+                m.put("quantiteTexte", com.ges.boutique.produit.ModeMesure.texteAffiche(modes.get(e.getKey()), e.getValue()[0]));
                 m.put("ca", e.getValue()[1]);
                 return m;
             }).collect(Collectors.toList());
@@ -257,13 +261,15 @@ public class RapportAnalytiqueController {
 
         // ---- Produits les plus vendus SUR CETTE PÉRIODE PRÉCISE ----
         Map<String, double[]> agregProduits = new LinkedHashMap<>(); // [quantite, ca]
+        Map<String, com.ges.boutique.produit.ModeMesure> modesProduits = new HashMap<>();
         for (Vente v : ventes) {
             if (v.getLignes() == null) continue;
             v.getLignes().forEach(l -> {
                 String nom = l.getProduitNom() != null ? l.getProduitNom() :
                         (l.getProduit() != null ? l.getProduit().getNom() : "?");
                 double[] agg = agregProduits.computeIfAbsent(nom, k -> new double[2]);
-                agg[0] += l.getQuantite() != null ? l.getQuantite() : 0;
+                if (l.getProduit() != null && l.getProduit().getModeMesure() != null) modesProduits.put(nom, l.getProduit().getModeMesure());
+                agg[0] += com.ges.boutique.produit.ModeMesure.qteAffichee(l.getProduit(), l.getQuantite());
                 agg[1] += l.getSousTotal() != null ? l.getSousTotal() : 0;
             });
         }
@@ -274,6 +280,7 @@ public class RapportAnalytiqueController {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("produitNom", e.getKey());
                     m.put("quantiteVendue", (long) e.getValue()[0]);
+                    m.put("quantiteTexte", com.ges.boutique.produit.ModeMesure.texteAffiche(modesProduits.get(e.getKey()), e.getValue()[0]));
                     m.put("ca", e.getValue()[1]);
                     return m;
                 }).collect(Collectors.toList());

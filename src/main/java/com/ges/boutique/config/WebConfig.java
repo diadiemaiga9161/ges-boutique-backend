@@ -1,12 +1,24 @@
 package com.ges.boutique.config;
 
+import com.ges.boutique.role.PermissionInterceptor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
+
+    private final PermissionInterceptor permissionInterceptor;
+
+    // Rôles personnalisés (Caissier...) : contrôle central des droits sur toute l'API.
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(permissionInterceptor).addPathPatterns("/api/**");
+    }
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {

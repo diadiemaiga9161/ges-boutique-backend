@@ -337,6 +337,27 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle rôle personnalisé sans le droit demandé (role.PermissionInterceptor)
+     */
+    @ExceptionHandler(PermissionRefuseeException.class)
+    public ResponseEntity<Map<String, Object>> handlePermissionRefusee(
+            PermissionRefuseeException ex,
+            WebRequest request) {
+
+        log.warn("Permission refusée: {}", ex.getMessage());
+
+        Map<String, Object> body = createErrorBody(
+                HttpStatus.FORBIDDEN,
+                "Permission refusée",
+                ex.getMessage(),
+                request.getDescription(false)
+        );
+        body.put(ERROR_CODE, "ROLE_PERMISSION_DENIED");
+
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * Handle fonctionnalité désactivée par le super admin (@RequireFeature)
      */
     @ExceptionHandler(FonctionnaliteDesactiveeException.class)

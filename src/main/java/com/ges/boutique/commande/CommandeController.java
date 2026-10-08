@@ -110,6 +110,20 @@ public class CommandeController {
         return ResponseEntity.ok(resp);
     }
 
+    /** Body : {"etape": "PRETE" | "LIVREE" | null}. Réservé aux commandes confirmées. */
+    @PatchMapping("/{id}/livraison")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
+    public ResponseEntity<Map<String, Object>> changerEtapeLivraison(@PathVariable Long id,
+                                                                     @RequestBody(required = false) Map<String, String> body) {
+        String valeur = body == null ? null : body.get("etape");
+        EtapeLivraison etape = (valeur == null || valeur.isBlank()) ? null : EtapeLivraison.valueOf(valeur);
+        Commande c = commandeService.changerEtapeLivraison(id, etape);
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("success", true);
+        resp.put("commande", c);
+        return ResponseEntity.ok(resp);
+    }
+
     @PatchMapping("/{id}/payer-credit")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDEUR')")
     public ResponseEntity<Map<String, Object>> payerCredit(@PathVariable Long id, @RequestBody Map<String, Double> body) {
