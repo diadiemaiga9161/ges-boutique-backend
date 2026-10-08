@@ -5,12 +5,17 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * Suivi des commandes depuis la vitrine, SANS compte : le téléphone de la boutique garde
- * les numéros de ses commandes ; le serveur ne répond que si numéro ET téléphone
- * correspondent (envoyé en POST pour ne pas laisser le téléphone dans les adresses/logs).
+ * Suivi des commandes depuis la vitrine, SANS compte : le téléphone du client garde le
+ * numéro de chaque commande et son code secret (remis à la commande). Le serveur ne
+ * répond que si le numéro ET son code correspondent : le numéro seul se devine.
  */
 @Data
 public class VitrineSuiviRequest {
-    private String telephone;
-    private List<String> numeros;
+    private List<Suivi> commandes;
+
+    @Data
+    public static class Suivi {
+        private String numero;
+        private String code;
+    }
 }

@@ -40,25 +40,28 @@ public class VitrineServiceImpl implements VitrineService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<VitrineSuiviDto> suivreCommandes(VitrineSuiviRequest request) {
         List<VitrineSuiviDto> resultat = new ArrayList<>();
-        String tel = chiffres(request == null ? null : request.getTelephone());
-        if (tel.length() < 6 || request.getNumeros() == null) return resultat;
+        if (request == null || request.getCommandes() == null) return resultat;
 
-        request.getNumeros().stream()
-                .filter(n -> n != null && !n.isBlank())
-                .map(String::trim)
-                .distinct()
+        request.getCommandes().stream()
+                .filter(x -> x != null && x.getNumero() != null && !x.getNumero().isBlank()
+                        && x.getCode() != null && !x.getCode().isBlank())
                 .limit(MAX_SUIVI)
-                .forEach(numero -> commandeRepository
-                        .findFirstByNumeroCommandeAndOrigine(numero, OrigineCommande.VITRINE)
-                        .filter(c -> tel.equals(chiffres(c.getClientTelephone())))
+                .forEach(x -> commandeRepository
+                        .findFirstByNumeroCommandeAndOrigine(x.getNumero().trim(), OrigineCommande.VITRINE)
+                        .filter(c -> memeCode(c.getCodeSuivi(), x.getCode().trim()))
+                        .filter(c -> resultat.stream().noneMatch(r -> r.getNumero().equals(c.getNumeroCommande())))
                         .ifPresent(c -> resultat.add(versSuivi(c))));
         resultat.sort(Comparator.comparing(VitrineSuiviDto::getDateCommande,
                 Comparator.nullsLast(Comparator.reverseOrder())));
         return resultat;
     }
 
-    private static String chiffres(String s) {
-        return s == null ? "" : s.replaceAll("\\D", "");
+    /** Comparaison en temps constant (ne laisse pas deviner le code caractère par caractère). */
+    private static boolean memeCode(String attendu, String recu) {
+        if (attendu == null || attendu.isEmpty()) return false;
+        return java.security.MessageDigest.isEqual(
+                attendu.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                recu.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private VitrineSuiviDto versSuivi(Commande c) {

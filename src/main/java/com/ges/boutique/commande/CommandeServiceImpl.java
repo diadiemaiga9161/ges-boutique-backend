@@ -29,6 +29,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CommandeServiceImpl implements CommandeService {
 
+    /** Quantité maximale d'un produit dans une commande de la vitrine (unités, ou kg/L/m). */
+    private static final int QUANTITE_MAX_VITRINE = 1000;
+
     private final CommandeRepository commandeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ClientRepository clientRepository;
@@ -253,6 +256,7 @@ public class CommandeServiceImpl implements CommandeService {
         Commande commande = new Commande();
         commande.setStatut(StatutCommande.BROUILLON);
         commande.setOrigine(OrigineCommande.VITRINE);
+        commande.setCodeSuivi(java.util.UUID.randomUUID().toString().replace("-", ""));
         commande.setVendeur(null);
         commande.setNotes(request.getNotes());
         commande.setAdresseLivraison(request.getAdresseLivraison());
@@ -292,8 +296,19 @@ public class CommandeServiceImpl implements CommandeService {
             ligne.setCommande(commande);
             ligne.setProduit(produit);
             // Vente à la mesure : le client de la vitrine commande en kg/L/m entiers.
-            ligne.setQuantite(produit.getModeMesure() != null
-                    ? lr.getQuantite() * produit.getModeMesure().getFacteur() : lr.getQuantite());
+            // Endpoint public : quantité plafonnée et calcul sans débordement (une quantité
+            // énorme donnait une ligne négative), jamais plus que le stock disponible.
+            if (lr.getQuantite() > QUANTITE_MAX_VITRINE) {
+                throw new IllegalArgumentException("Quantité trop grande pour \"" + produit.getNom()
+                        + "\" (maximum " + QUANTITE_MAX_VITRINE + ").");
+            }
+            long quantiteStock = produit.getModeMesure() != null
+                    ? (long) lr.getQuantite() * produit.getModeMesure().getFacteur() : lr.getQuantite();
+            if (quantiteStock > produit.getQuantite()) {
+                throw new IllegalStateException("Il n'y a pas assez de \"" + produit.getNom()
+                        + "\" pour cette quantité. Réduisez la quantité.");
+            }
+            ligne.setQuantite(Math.toIntExact(quantiteStock));
             ligne.setPrixUnitaire(produit.getPrixVente());
             ligne.setPrixAchat(produit.getPrixAchat());
             ligne.calculer();

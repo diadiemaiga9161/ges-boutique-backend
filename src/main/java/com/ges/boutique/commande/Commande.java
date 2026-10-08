@@ -1,5 +1,6 @@
 package com.ges.boutique.commande;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.ges.boutique.client.Client;
 import com.ges.boutique.utilisateur.Utilisateur;
@@ -27,6 +28,13 @@ public class Commande {
 
     @Column(nullable = false, unique = true)
     private String numeroCommande;
+
+    /** Commande de la vitrine : code secret aléatoire remis au client pour suivre sa
+     *  commande sans compte (le numéro seul se devine : il vient de l'heure). Jamais
+     *  renvoyé dans les listes du personnel. */
+    @JsonIgnore
+    @Column(name = "code_suivi", length = 40)
+    private String codeSuivi;
 
     // Nullable : une commande venue de la vitrine publique n'a pas encore de vendeur
     // au moment de la création — il n'est assigné qu'à la validation (cf. valider()).

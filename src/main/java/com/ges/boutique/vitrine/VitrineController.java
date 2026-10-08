@@ -98,7 +98,7 @@ public class VitrineController {
                 .body(iconeService.icone(VitrineIconeService.tailleValide(taille)));
     }
 
-    /** Suivi sans compte : numéro de commande + téléphone (voir VitrineSuiviRequest). */
+    /** Suivi sans compte : numéro de commande + code secret (voir VitrineSuiviRequest). */
     @PostMapping("/suivi")
     public List<VitrineSuiviDto> suivreCommandes(@RequestBody VitrineSuiviRequest request) {
         return vitrineService.suivreCommandes(request);
@@ -111,6 +111,7 @@ public class VitrineController {
             Commande commande = commandeService.creerDepuisVitrine(request);
             resp.put("success", true);
             resp.put("numeroCommande", commande.getNumeroCommande());
+            resp.put("codeSuivi", commande.getCodeSuivi());
             resp.put("message", "Commande envoyée, la boutique va la préparer");
             return ResponseEntity.ok(resp);
         } catch (IllegalArgumentException | IllegalStateException e) {
