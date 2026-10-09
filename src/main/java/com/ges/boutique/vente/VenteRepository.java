@@ -1,6 +1,8 @@
 package com.ges.boutique.vente;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +16,12 @@ import java.util.Optional;
 
 @Repository
 public interface VenteRepository extends JpaRepository<Vente, Long> {
+
+    /** Vente verrouillée jusqu'à la fin de la transaction : deux annulations simultanées de la même
+     *  vente (double clic, demande renvoyée par le réseau) passent l'une après l'autre. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM Vente v WHERE v.id = :id")
+    Optional<Vente> findByIdPourMiseAJour(@Param("id") Long id);
 
     @Query("SELECT v FROM Vente v WHERE v.dateVente BETWEEN :debut AND :fin ORDER BY v.dateVente DESC")
     List<Vente> findByDateRange(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);

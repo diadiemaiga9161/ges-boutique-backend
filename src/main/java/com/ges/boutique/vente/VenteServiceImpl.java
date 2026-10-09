@@ -503,7 +503,10 @@ public class VenteServiceImpl implements VenteService {
     public Vente annulerVente(Long venteId, Long utilisateurId, String motif) {
         log.info("Annulation de la vente ID: {} par utilisateur: {}", venteId, utilisateurId);
 
-        Vente vente = obtenirVenteParId(venteId);
+        // Lecture verrouillée : une 2e annulation arrivant au même instant attend la fin de la
+        // première, puis voit la vente déjà annulée (avant : l'argent sortait deux fois du tiroir).
+        Vente vente = venteRepository.findByIdPourMiseAJour(venteId)
+                .orElseGet(() -> obtenirVenteParId(venteId));
 
         if (Boolean.TRUE.equals(vente.getAnnulee())) {
             throw new IllegalStateException("Cette vente est déjà annulée");

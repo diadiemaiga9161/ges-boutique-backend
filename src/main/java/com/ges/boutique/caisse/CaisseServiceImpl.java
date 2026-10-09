@@ -987,6 +987,16 @@ public class CaisseServiceImpl implements CaisseService {
 
         OperationCaisse venteOperation = venteOperationOpt.get();
 
+        // Déjà annulée en caisse (ex. appel en double) : ne pas retirer l'argent une 2e fois.
+        if (Boolean.TRUE.equals(venteOperation.getVenteAnnulee())) {
+            Optional<OperationCaisse> dejaFaite = operationRepository.findOperationVenteByVenteIdAndType(
+                    vente.getId(), TypeOperationCaisse.ANNULATION_VENTE);
+            if (dejaFaite.isPresent()) {
+                log.warn("Annulation en double ignorée pour la vente {}", vente.getNumeroVente());
+                return dejaFaite.get();
+            }
+        }
+
         Double soldeAvant = caisse.getSoldeActuel();
         Double montantVente = vente.getMontantTotal();
 
