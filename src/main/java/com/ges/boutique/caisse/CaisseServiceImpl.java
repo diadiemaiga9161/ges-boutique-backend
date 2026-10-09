@@ -1388,6 +1388,21 @@ public class CaisseServiceImpl implements CaisseService {
                         - (op.getSoldeAvant() != null ? op.getSoldeAvant() : 0.0))
                 .sum();
 
+        // Argent réellement entré / sorti du tiroir sur la période, avec la même règle que
+        // soldeNetPeriode (effet réel de chaque opération, dépôts banque à part) : l'écran Caisse
+        // affiche ainsi Entré − Sorti = Différence. Les ventes Wave/Moov/Orange Money n'y figurent
+        // pas (rien n'entre dans le tiroir) ; dépenses, remboursements… sont bien dans « sorti ».
+        double argentEntreTiroir = 0.0;
+        double argentSortiTiroir = 0.0;
+        double argentDeposeBanque = 0.0;
+        for (OperationCaisse op : operationsBrutes) {
+            double effet = (op.getSoldeApres() != null ? op.getSoldeApres() : 0.0)
+                    - (op.getSoldeAvant() != null ? op.getSoldeAvant() : 0.0);
+            if (op.getType() == TypeOperationCaisse.VIREMENT_BANQUE) argentDeposeBanque -= effet;
+            else if (effet > 0) argentEntreTiroir += effet;
+            else argentSortiTiroir -= effet;
+        }
+
         Map<LocalDate, Double> chiffreParJour = new HashMap<>();
         Map<LocalDate, Integer> nombreOperationsParJour = new HashMap<>();
 
@@ -1412,6 +1427,9 @@ public class CaisseServiceImpl implements CaisseService {
         stats.put("totalSorties", arrondir(totalSortiesCaisse));
         stats.put("totalEntrees", arrondir(totalEntreesCaisse));
         stats.put("soldeNetPeriode", arrondir(soldeNetPeriodeReel));
+        stats.put("argentEntreTiroir", arrondir(argentEntreTiroir));
+        stats.put("argentSortiTiroir", arrondir(argentSortiTiroir));
+        stats.put("argentDeposeBanque", arrondir(argentDeposeBanque));
         stats.put("nombreOperations", operations.size());
         stats.put("moyenneJournaliere", arrondir(totalEntreesCaisse / (ChronoUnit.DAYS.between(dateDebut, dateFin) + 1)));
         stats.put("chiffreParJour", chiffreParJour);
