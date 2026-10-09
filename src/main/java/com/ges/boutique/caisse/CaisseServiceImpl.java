@@ -967,12 +967,22 @@ public class CaisseServiceImpl implements CaisseService {
         Double soldeAvant = caisse.getSoldeActuel();
         Double montantVente = vente.getMontantTotal();
 
-        if (caisse.getSoldeActuel() < montantVente) {
+        // L'annulation retire du tiroir exactement ce que la vente y avait mis : une vente payée
+        // par Wave, Moov, Orange Money… n'a rien ajouté au tiroir (l'argent est sur le compte
+        // mobile money), son annulation ne doit donc rien en retirer. Avant, le montant total
+        // était retiré dans tous les cas → caisse plus basse que l'argent réel.
+        double entreDansLeTiroir = Math.max(0.0,
+                (venteOperation.getSoldeApres() != null ? venteOperation.getSoldeApres() : 0.0)
+                        - (venteOperation.getSoldeAvant() != null ? venteOperation.getSoldeAvant() : 0.0));
+
+        if (caisse.getSoldeActuel() < entreDansLeTiroir) {
             throw new SoldeInsuffisantException("Solde insuffisant pour annuler la vente");
         }
 
-        caisse.setSoldeActuel(soldeAvant - montantVente);
-        caisse.setTotalSorties(caisse.getTotalSorties() + montantVente);
+        if (entreDansLeTiroir > 0) {
+            caisse.setSoldeActuel(soldeAvant - entreDansLeTiroir);
+            caisse.setTotalSorties(caisse.getTotalSorties() + entreDansLeTiroir);
+        }
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
 
@@ -982,8 +992,14 @@ public class CaisseServiceImpl implements CaisseService {
         operation.setMontant(montantVente);
         operation.setSoldeAvant(soldeAvant);
         operation.setSoldeApres(caisse.getSoldeActuel());
-        operation.setMotif(motif != null ? "ANNULATION VENTE " + vente.getNumeroVente() + " - " + motif :
-                "Annulation vente N°" + vente.getNumeroVente());
+        String motifAnnulation = motif != null ? "ANNULATION VENTE " + vente.getNumeroVente() + " - " + motif :
+                "Annulation vente N°" + vente.getNumeroVente();
+        if (entreDansLeTiroir < montantVente) {
+            motifAnnulation += entreDansLeTiroir > 0
+                    ? " (" + Math.round(entreDansLeTiroir) + " F retirés du tiroir, le reste payé hors caisse)"
+                    : " (payée hors caisse : rien retiré du tiroir)";
+        }
+        operation.setMotif(motifAnnulation);
         operation.setVente(vente);
         operation.setEstReglee(true);
         operation.setDateOperation(LocalDateTime.now());
