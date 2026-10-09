@@ -24,10 +24,14 @@ import com.ges.boutique.utilisateur.UtilisateurRepository;
 import com.ges.boutique.vente.ModePaiement;
 import com.ges.boutique.vente.Vente;
 import com.ges.boutique.vente.VenteRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -42,6 +46,9 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class CaisseServiceImpl implements CaisseService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final CaisseRepository caisseRepository;
     private final OperationCaisseRepository operationRepository;
@@ -239,8 +246,24 @@ public class CaisseServiceImpl implements CaisseService {
 
     @Override
     public Caisse getCaisseOuverte() {
-        return caisseRepository.findCaisseOuverte()
-                .orElseThrow(() -> new IllegalStateException("Aucune caisse n'est ouverte. Veuillez ouvrir une caisse"));
+        return verrouiller(caisseRepository.findCaisseOuverte()
+                .orElseThrow(() -> new IllegalStateException("Aucune caisse n'est ouverte. Veuillez ouvrir une caisse")));
+    }
+
+    /**
+     * Relit la caisse en la verrouillant jusqu'à la fin de la transaction. Sans ce verrou, deux
+     * opérations simultanées (paiement groupé, double clic) partaient du même solde et la seconde
+     * écrasait la première : de l'argent encaissé disparaissait du solde. Les modifications en
+     * attente sont d'abord enregistrées pour ne pas être perdues par la relecture.
+     */
+    private Caisse verrouiller(Caisse caisse) {
+        if (caisse != null && TransactionSynchronizationManager.isActualTransactionActive()
+                && !TransactionSynchronizationManager.isCurrentTransactionReadOnly()
+                && entityManager.contains(caisse)) {
+            entityManager.flush();
+            entityManager.refresh(caisse, LockModeType.PESSIMISTIC_WRITE);
+        }
+        return caisse;
     }
 
     @Override
@@ -1057,6 +1080,15 @@ public class CaisseServiceImpl implements CaisseService {
 
         if (!Boolean.TRUE.equals(vente.getEstCredit())) {
             return annulerVenteAvecRepercussion(vente, utilisateurId, motif);
+        }
+
+        // Crédit déjà annulé en caisse : ne pas rembourser une 2e fois (avant, chaque nouvel appui
+        // sur « Annuler » remboursait de nouveau le client depuis le tiroir).
+        Optional<OperationCaisse> annulationExistante = operationRepository.findFirstByVenteIdAndType(
+                vente.getId(), TypeOperationCaisse.ANNULATION_CREDIT);
+        if (annulationExistante.isPresent()) {
+            log.warn("Annulation de crédit en double ignorée pour la vente {}", vente.getNumeroVente());
+            return annulationExistante.get();
         }
 
         if (Boolean.TRUE.equals(vente.getAnnulee())) {
@@ -2146,16 +2178,43 @@ public class CaisseServiceImpl implements CaisseService {
             throw new IllegalStateException("Ce règlement est déjà annulé");
         }
 
-        Caisse caisse = op.getCaisse();
+        Caisse caisse = verrouiller(op.getCaisse());
+        // Relu avec verrou (lecture à jour, pas l'ancienne « photo » de la transaction) : une 2e
+        // annulation simultanée du même règlement voit qu'il est déjà annulé.
+        entityManager.refresh(op, LockModeType.PESSIMISTIC_WRITE);
+        if (op.isAnnule()) {
+            throw new IllegalStateException("Ce règlement est déjà annulé");
+        }
         double montant = op.getMontant();
         // On ne retire du tiroir que ce que ce règlement y avait mis (rien s'il a été payé en mobile money).
         double dansLeTiroir = ajouteAuTiroir(op);
 
         // Reverse l'entrée en caisse
-        caisse.setSoldeActuel(caisse.getSoldeActuel() - dansLeTiroir);
+        double soldeAvantAnnulation = caisse.getSoldeActuel();
+        caisse.setSoldeActuel(soldeAvantAnnulation - dansLeTiroir);
         caisse.setTotalEntrees(Math.max(0.0, caisse.getTotalEntrees() - dansLeTiroir));
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
+
+        // Trace dans l'historique : avant, le solde baissait sans aucune ligne, ce qui laissait un
+        // « trou » inexplicable et faussait la « Différence » de la journée.
+        OperationCaisse trace = new OperationCaisse();
+        trace.setCaisse(caisse);
+        trace.setType(TypeOperationCaisse.AJUSTEMENT);
+        trace.setMontant(montant);
+        trace.setSoldeAvant(soldeAvantAnnulation);
+        trace.setSoldeApres(caisse.getSoldeActuel());
+        String motifTrace = "Annulation règlement crédit #" + op.getId()
+                + (op.getMotif() != null ? " (" + op.getMotif() + ")" : "")
+                + (dansLeTiroir < montant ? " - payé hors caisse, rien retiré du tiroir" : "");
+        trace.setMotif(motifTrace.length() > 250 ? motifTrace.substring(0, 250) : motifTrace);
+        trace.setModePaiement(op.getModePaiement());
+        trace.setEstReglee(true);
+        trace.setDateOperation(LocalDateTime.now());
+        if (utilisateurId != null) {
+            utilisateurRepository.findById(utilisateurId).ifPresent(trace::setUtilisateur);
+        }
+        operationRepository.save(trace);
 
         // Rétablir la dette crédit sur l'opération VENTE_CREDIT associée
         if (op.getVenteCreditId() != null) {

@@ -13,12 +13,16 @@ import com.ges.boutique.journalaudit.JournalAuditService;
 import com.ges.boutique.journalaudit.TypeActionAudit;
 import com.ges.boutique.utilisateur.Utilisateur;
 import com.ges.boutique.utilisateur.UtilisateurRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,6 +39,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DetteAncienneServiceImpl implements DetteAncienneService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final DetteAncienneRepository detteRepository;
     private final ReglementDetteAncienneRepository reglementRepository;
@@ -450,9 +457,16 @@ public class DetteAncienneServiceImpl implements DetteAncienneService {
     }
 
     private Caisse getCaisseOuverte() {
-        return caisseRepository.findCaisseOuverte()
+        Caisse caisse = caisseRepository.findCaisseOuverte()
                 .orElseThrow(() -> new IllegalStateException(
                         "Aucune caisse n'est ouverte. Veuillez ouvrir une caisse"));
+        // Verrou jusqu'à la fin de la transaction : un règlement simultané ne peut pas écraser le solde.
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            entityManager.flush();
+            entityManager.refresh(caisse, LockModeType.PESSIMISTIC_WRITE);
+        }
+        return caisse;
     }
 
     private void ouvrirCaisse() {
