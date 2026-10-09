@@ -22,6 +22,9 @@ import com.ges.boutique.produit.ProduitNiveauRepository;
 import com.ges.boutique.produit.ProduitRepository;
 import com.ges.boutique.utilisateur.Utilisateur;
 import com.ges.boutique.utilisateur.UtilisateurRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -41,6 +44,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class VenteServiceImpl implements VenteService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
 
     private static final String CLIENT_DIVERS_NOM = "Client divers";
 
@@ -68,6 +75,7 @@ public class VenteServiceImpl implements VenteService {
     @Transactional
     @CacheEvict(value = "produits", allEntries = true)
     public Vente creerVente(VenteRequest request) {
+        reserverProduits(request.getLignes());
         Vente savedVente = preparerVenteBase(request);
 
         if (Boolean.TRUE.equals(savedVente.getEstCredit())) {
@@ -124,6 +132,7 @@ public class VenteServiceImpl implements VenteService {
         }
 
         validerRequeteVente(request);
+        reserverProduits(request.getLignes());
 
         Utilisateur vendeur = utilisateurRepository.findById(request.getVendeurId())
                 .orElseThrow(() -> new RessourceIntrouvableException("Vendeur non trouvé: " + request.getVendeurId()));
@@ -1637,5 +1646,23 @@ public class VenteServiceImpl implements VenteService {
             }
         }
         return total;
+    }
+
+    /**
+     * Réserve (verrouille) les produits de la vente dès le début, toujours dans l'ordre de leur
+     * numéro. Sans cela, deux ventes simultanées du même produit le lisaient toutes les deux puis
+     * voulaient toutes les deux baisser son stock : MySQL annulait l'une (interblocage) et la
+     * vente était refusée. Désormais la seconde attend quelques millièmes de seconde puis passe,
+     * avec le stock à jour.
+     */
+    private void reserverProduits(List<LigneVenteRequest> lignes) {
+        if (lignes == null) return;
+        lignes.stream()
+                .map(LigneVenteRequest::getProduitId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .forEach(id -> produitRepository.findById(id)
+                        .ifPresent(p -> entityManager.refresh(p, LockModeType.PESSIMISTIC_WRITE)));
     }
 }
