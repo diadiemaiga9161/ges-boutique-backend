@@ -1,5 +1,6 @@
 package com.ges.boutique.boutique;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ges.boutique.exception.MessageErreurUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,8 @@ import java.util.Map;
 public class BoutiqueController {
 
     private final BoutiqueService boutiqueService;
+    private final LogoAllege logoAllege;
+    private final ObjectMapper objectMapper;
 
     // ==================== Endpoints sans ID (existants) ====================
 
@@ -32,7 +35,7 @@ public class BoutiqueController {
         Boutique boutique = boutiqueService.obtenirBoutique();
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("boutique", boutique);
+        response.put("boutique", avecLogoAllege(boutique));
         return ResponseEntity.ok(response);
     }
 
@@ -151,5 +154,16 @@ public class BoutiqueController {
             err.put("message", "Erreur lors de la lecture du fichier: " + MessageErreurUtil.messageClient(e));
             return ResponseEntity.internalServerError().body(err);
         }
+    }
+
+    /** Mêmes champs que l'entité, avec le logo allégé (logo et logoPath, lus selon les applis). */
+    @SuppressWarnings("unchecked")
+    private Object avecLogoAllege(Boutique boutique) {
+        if (boutique == null || boutique.getLogo() == null) return boutique;
+        Map<String, Object> champs = objectMapper.convertValue(boutique, Map.class);
+        String logo = logoAllege.alleger(boutique.getLogo());
+        if (champs.containsKey("logo")) champs.put("logo", logo);
+        if (champs.containsKey("logoPath")) champs.put("logoPath", logo);
+        return champs;
     }
 }

@@ -1,5 +1,6 @@
 package com.ges.boutique.vitrine;
 
+import com.ges.boutique.boutique.LogoAllege;
 import com.ges.boutique.commande.Commande;
 import com.ges.boutique.commande.CommandeService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class VitrineController {
     private final VitrineService vitrineService;
     private final CommandeService commandeService;
     private final VitrineIconeService iconeService;
+    private final LogoAllege logoAllege;
 
     @GetMapping("/produits")
     public List<VitrineProduitDto> obtenirProduits() {
@@ -43,7 +45,10 @@ public class VitrineController {
 
     @GetMapping("/infos")
     public VitrineInfoDto obtenirInfos() {
-        return vitrineService.obtenirInfosVitrine();
+        VitrineInfoDto infos = vitrineService.obtenirInfosVitrine();
+        // Logo allégé pour l'affichage ; les icônes d'installation partent de l'original.
+        infos.setLogoPath(logoAllege.alleger(infos.getLogoPath()));
+        return infos;
     }
 
     /**

@@ -176,6 +176,8 @@ public class BeneficeService {
         List<Vente> ventesAnnuleesEntites = venteRepository.findVentesAnnuleesByDateAnnulationRange(debut, fin);
         List<Map<String, Object>> ventesAnnulees = new ArrayList<>();
         double beneficePerdu = 0.0;
+        // Un seul accès par personne : la même personne annule souvent beaucoup de ventes.
+        Map<Long, String> nomsAnnulation = new HashMap<>();
         for (Vente v : ventesAnnuleesEntites) {
             double b = v.getBeneficeTotal() != null ? v.getBeneficeTotal() : 0.0;
             beneficePerdu += b;
@@ -187,7 +189,8 @@ public class BeneficeService {
             a.put("beneficePerdu", arrondi(b));
             a.put("dateAnnulation", v.getDateAnnulation());
             a.put("motifAnnulation", v.getMotifAnnulation());
-            a.put("annulePar", resoudreNomUtilisateur(v.getUtilisateurAnnulation()));
+            a.put("annulePar", v.getUtilisateurAnnulation() == null ? null
+                    : nomsAnnulation.computeIfAbsent(v.getUtilisateurAnnulation(), this::resoudreNomUtilisateur));
             ventesAnnulees.add(a);
         }
 
