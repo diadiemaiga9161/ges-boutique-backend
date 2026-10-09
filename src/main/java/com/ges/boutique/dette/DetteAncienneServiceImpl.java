@@ -243,8 +243,13 @@ public class DetteAncienneServiceImpl implements DetteAncienneService {
         Caisse caisse = getCaisseOuverte();
         Double soldeAvant = caisse.getSoldeActuel();
 
-        caisse.setSoldeActuel(soldeAvant + request.getMontantPaye());
-        caisse.setTotalEntrees(caisse.getTotalEntrees() + request.getMontantPaye());
+        // Payé par Wave, Moov ou Orange Money : la dette baisse, mais rien n'entre dans le tiroir.
+        String mode = request.getModePaiement();
+        boolean horsCaisse = "ORANGE_MONEY".equals(mode) || "MOOV_MONEY".equals(mode) || "WAVE_MONEY".equals(mode);
+        if (!horsCaisse) {
+            caisse.setSoldeActuel(soldeAvant + request.getMontantPaye());
+            caisse.setTotalEntrees(caisse.getTotalEntrees() + request.getMontantPaye());
+        }
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
 

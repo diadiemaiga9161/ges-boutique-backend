@@ -327,8 +327,12 @@ public class CaisseServiceImpl implements CaisseService {
         verifierEtOuvrirCaisseSiNecessaire();
         Caisse caisse = getCaisseOuverte();
         Double soldeAvant = caisse.getSoldeActuel();
-        caisse.setSoldeActuel(soldeAvant + montant);
-        caisse.setTotalEntrees(caisse.getTotalEntrees() + montant);
+        // Entrée reçue par Wave, Moov ou Orange Money (ex. avance client) : notée, mais rien
+        // n'entre dans le tiroir.
+        if (!estHorsCaisse(modePaiement)) {
+            caisse.setSoldeActuel(soldeAvant + montant);
+            caisse.setTotalEntrees(caisse.getTotalEntrees() + montant);
+        }
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
 
@@ -677,6 +681,18 @@ public class CaisseServiceImpl implements CaisseService {
 
     // ==================== VENTES ====================
 
+    /** Wave, Moov, Orange Money : l'argent arrive sur le compte mobile money, jamais dans le tiroir. */
+    private static boolean estHorsCaisse(String modePaiement) {
+        return modePaiement != null &&
+                (modePaiement.equals("ORANGE_MONEY") || modePaiement.equals("MOOV_MONEY") || modePaiement.equals("WAVE_MONEY"));
+    }
+
+    /** Ce qu'une opération a réellement ajouté au tiroir (0 pour un paiement mobile money). */
+    private static double ajouteAuTiroir(OperationCaisse op) {
+        return Math.max(0.0, (op.getSoldeApres() != null ? op.getSoldeApres() : 0.0)
+                - (op.getSoldeAvant() != null ? op.getSoldeAvant() : 0.0));
+    }
+
     @Override
     @Transactional
     public OperationCaisse enregistrerVente(Vente vente, Long utilisateurId,
@@ -691,8 +707,7 @@ public class CaisseServiceImpl implements CaisseService {
 
         // Orange Money, Moov Money et Wave ne touchent pas au solde de la caisse
         // (l'argent ne rentre pas physiquement dans le tiroir-caisse)
-        boolean estMobileMoney = modePaiement != null &&
-                (modePaiement.equals("ORANGE_MONEY") || modePaiement.equals("MOOV_MONEY") || modePaiement.equals("WAVE_MONEY"));
+        boolean estMobileMoney = estHorsCaisse(modePaiement);
 
         if (!estMobileMoney) {
             caisse.setSoldeActuel(soldeAvant + vente.getMontantTotal());
@@ -779,8 +794,13 @@ public class CaisseServiceImpl implements CaisseService {
         double montantCashVerse = montantVerseInitial - avanceUtilisee;
 
         if (montantCashVerse > 0) {
-            caisse.setSoldeActuel(soldeAvant + montantCashVerse);
-            caisse.setTotalEntrees(caisse.getTotalEntrees() + montantCashVerse);
+            // Acompte payé par Wave, Moov ou Orange Money : enregistré pour le suivi du crédit,
+            // mais rien n'entre dans le tiroir.
+            boolean acompteHorsCaisse = vente.getModePaiement() != null && estHorsCaisse(vente.getModePaiement().name());
+            if (!acompteHorsCaisse) {
+                caisse.setSoldeActuel(soldeAvant + montantCashVerse);
+                caisse.setTotalEntrees(caisse.getTotalEntrees() + montantCashVerse);
+            }
             caisse.setDerniereOperation(LocalDateTime.now());
             caisseRepository.save(caisse);
 
@@ -855,8 +875,11 @@ public class CaisseServiceImpl implements CaisseService {
         Caisse caisse = getCaisseOuverte();
         Double soldeAvant = caisse.getSoldeActuel();
 
-        caisse.setSoldeActuel(soldeAvant + montantRegle);
-        caisse.setTotalEntrees(caisse.getTotalEntrees() + montantRegle);
+        // Règlement payé par Wave, Moov ou Orange Money : la dette baisse, mais rien n'entre dans le tiroir.
+        if (!estHorsCaisse(modePaiement)) {
+            caisse.setSoldeActuel(soldeAvant + montantRegle);
+            caisse.setTotalEntrees(caisse.getTotalEntrees() + montantRegle);
+        }
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
 
@@ -1083,13 +1106,25 @@ public class CaisseServiceImpl implements CaisseService {
         }
 
         List<OperationCaisse> reglements = operationRepository.findReglementsByVenteCredit(vente.getId());
+        double verseDansLeTiroir = 0.0;
+        boolean reglementsTrouves = false;
         for (OperationCaisse reglement : reglements) {
+            if (reglement.getType() == TypeOperationCaisse.REGLEMENT_CREDIT && !reglement.isAnnule()) {
+                reglementsTrouves = true;
+                verseDansLeTiroir += ajouteAuTiroir(reglement);
+            }
             reglement.setVenteAnnulee(true);
             operationRepository.save(reglement);
         }
 
-        // Si le client a déjà versé de l'argent → créer un remboursement
-        double montantVerse = vente.getMontantVerse() != null ? vente.getMontantVerse() : 0.0;
+        // Si le client a déjà versé de l'argent → le rembourser depuis le tiroir, mais seulement la
+        // part entrée dans le tiroir : ni ce qui a été payé en Wave/Moov/Orange Money, ni l'avance
+        // du client (rendue sur son compte d'avance par VenteServiceImpl). Anciens crédits dont les
+        // règlements ne sont pas retrouvés : calcul d'avant (montant versé hors avance).
+        double montantVerse = reglementsTrouves
+                ? verseDansLeTiroir
+                : Math.max(0.0, (vente.getMontantVerse() != null ? vente.getMontantVerse() : 0.0)
+                        - (vente.getMontantAvanceUtilise() != null ? vente.getMontantAvanceUtilise() : 0.0));
         if (montantVerse > 0) {
             log.info("Remboursement de {} FCFA au client {} suite à annulation crédit {}", montantVerse, vente.getClientNom(), vente.getNumeroVente());
             double soldeAvantRemb = caisse.getSoldeActuel();
@@ -2085,10 +2120,12 @@ public class CaisseServiceImpl implements CaisseService {
 
         Caisse caisse = op.getCaisse();
         double montant = op.getMontant();
+        // On ne retire du tiroir que ce que ce règlement y avait mis (rien s'il a été payé en mobile money).
+        double dansLeTiroir = ajouteAuTiroir(op);
 
         // Reverse l'entrée en caisse
-        caisse.setSoldeActuel(caisse.getSoldeActuel() - montant);
-        caisse.setTotalEntrees(Math.max(0.0, caisse.getTotalEntrees() - montant));
+        caisse.setSoldeActuel(caisse.getSoldeActuel() - dansLeTiroir);
+        caisse.setTotalEntrees(Math.max(0.0, caisse.getTotalEntrees() - dansLeTiroir));
         caisse.setDerniereOperation(LocalDateTime.now());
         caisseRepository.save(caisse);
 
@@ -2124,7 +2161,7 @@ public class CaisseServiceImpl implements CaisseService {
 
         op.setAnnule(true);
         op.setDateAnnulationReglement(LocalDateTime.now());
-        log.info("Règlement crédit #{} annulé: {} F retiré de la caisse", operationId, montant);
+        log.info("Règlement crédit #{} annulé: {} F (dont {} F retirés du tiroir)", operationId, montant, dansLeTiroir);
         return operationRepository.save(op);
     }
 
