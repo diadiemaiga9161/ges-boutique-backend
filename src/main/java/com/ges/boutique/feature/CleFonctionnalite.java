@@ -26,7 +26,8 @@ public enum CleFonctionnalite {
     IMAGES_PRODUITS("Photos des produits"),
     ROLES_PERSONNALISES("Rôles et permissions personnalisés"),
     PRIMES_PRODUITS("Primes sur produits (vendeurs)"),
-    VENTE_A_LA_MESURE("Vente au poids / au litre / au mètre");
+    VENTE_A_LA_MESURE("Vente au poids / au litre / au mètre"),
+    POINTAGE("Pointage des employés (code QR)");
 
     private final String libelle;
 
