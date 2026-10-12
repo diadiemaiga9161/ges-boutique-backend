@@ -1,5 +1,6 @@
 package com.ges.boutique.commission;
 
+import com.ges.boutique.produit.ModeMesure;
 import com.ges.boutique.exception.RessourceIntrouvableException;
 import com.ges.boutique.produit.Categorie;
 import com.ges.boutique.produit.CategorieRepository;
@@ -282,7 +283,7 @@ public class CommissionService {
                 Gain g = parRegle.get(r.getId());
                 if (g == null) continue;
                 Map<String, Object> dm = regleEnMap(r, noms);
-                dm.put("quantiteVendue", g.quantite);
+                dm.put("quantiteVendue", quantiteLisible(g.quantite));
                 dm.put("montantVendu", arrondir(g.chiffreAffaires));
                 dm.put("prime", arrondir(g.montant));
                 if (r.getType() == TypeCommission.OBJECTIF) {
@@ -331,16 +332,23 @@ public class CommissionService {
             Map<String, Object> m = regleEnMap(r, noms);
             if (r.getType() == TypeCommission.OBJECTIF) {
                 Gain g = mesGains.get(r.getId());
-                long q = g != null ? g.quantite : 0;
-                m.put("quantiteVendue", q);
+                double q = g != null ? g.quantite : 0;
+                m.put("quantiteVendue", quantiteLisible(q));
                 m.put("objectifAtteint", q >= r.getQuantiteObjectif());
             }
             return m;
         }).toList();
     }
 
+    /** 12.0 -> 12 ; 1.25 kg reste 1.25 (au millième près). */
+    private static Number quantiteLisible(double q) {
+        double arrondi = Math.round(q * 1000) / 1000.0;
+        return arrondi == Math.rint(arrondi) ? (Number) Math.round(arrondi) : (Number) arrondi;
+    }
+
     private static final class Gain {
-        long quantite;
+        /** Quantité dans l'unité de vente : pièces, ou kg / L / m pour les produits vendus à la mesure. */
+        double quantite;
         double chiffreAffaires;
         double montant;
     }
@@ -409,14 +417,14 @@ public class CommissionService {
     }
 
     private record LigneCalcul(Long ligneId, Long vendeurId, Long produitId, Long categorieId,
-                               long quantiteBase, double montant, LocalDateTime date) { }
+                               double quantiteBase, double montant, LocalDateTime date) { }
 
     private List<LigneCalcul> chargerLignes(LocalDate debut, LocalDate fin, Set<Long> produits,
                                             Set<Long> categories, Long vendeurId) {
         // Listes jamais vides dans un IN (sinon erreur SQL) : -1 n'existe pas.
         List<Long> p = produits.isEmpty() ? List.of(-1L) : new ArrayList<>(produits);
         List<Long> c = categories.isEmpty() ? List.of(-1L) : new ArrayList<>(categories);
-        String jpql = "SELECT l.id, v.vendeur.id, p.id, c.id, l.quantite, l.niveauFacteur, l.sousTotal, v.dateVente "
+        String jpql = "SELECT l.id, v.vendeur.id, p.id, c.id, l.quantite, l.niveauFacteur, l.sousTotal, v.dateVente, p.modeMesure "
                 + "FROM LigneVente l JOIN l.vente v JOIN l.produit p LEFT JOIN p.categorie c "
                 + "WHERE (v.annulee = false OR v.annulee IS NULL) AND v.vendeur IS NOT NULL "
                 + "AND v.dateVente >= :d AND v.dateVente < :f AND (p.id IN :p OR c.id IN :c)"
@@ -441,8 +449,12 @@ public class CommissionService {
                 quantite -= ret[0] != null ? ((Number) ret[0]).intValue() : 0;
                 montant -= ret[1] != null ? ((Number) ret[1]).doubleValue() : 0.0;
             }
+            // Produit vendu à la mesure : quantité stockée en g / ml / cm, ramenée en kg / L / m pour
+            // que « 50 F par unité » veuille dire 50 F par kilo (et non 50 F par gramme).
+            ModeMesure mesure = (ModeMesure) r[8];
+            double quantiteVendue = (double) quantite * facteur / (mesure != null ? mesure.getFacteur() : 1);
             res.add(new LigneCalcul(id, (Long) r[1], (Long) r[2], (Long) r[3],
-                    (long) quantite * facteur, montant, (LocalDateTime) r[7]));
+                    quantiteVendue, montant, (LocalDateTime) r[7]));
         }
         return res;
     }

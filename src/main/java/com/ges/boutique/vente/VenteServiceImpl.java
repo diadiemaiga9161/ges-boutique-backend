@@ -52,6 +52,7 @@ public class VenteServiceImpl implements VenteService {
     private static final String CLIENT_DIVERS_NOM = "Client divers";
 
     private final VenteRepository venteRepository;
+    private final com.ges.boutique.notification.NotificationPersistanceService notificationPersistance;
     private final ProduitRepository produitRepository;
     private final ProduitNiveauRepository niveauRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -533,6 +534,7 @@ public class VenteServiceImpl implements VenteService {
                 vente.setDateAnnulation(LocalDateTime.now());
                 vente.setUtilisateurAnnulation(utilisateurId);
                 Vente venteAnnuleeNonReglee = venteRepository.save(vente);
+                notifierAnnulation(venteAnnuleeNonReglee, utilisateurId, motif);
                 fideliteService.annulerMouvementsPourVente(venteId);
                 notificationService.notifierVenteAnnulee(Map.of("venteId", venteId, "montant", vente.getMontantTotal()));
                 notificationService.notifierMiseAJourDashboard();
@@ -579,6 +581,7 @@ public class VenteServiceImpl implements VenteService {
         vente.setUtilisateurAnnulation(utilisateurId);
 
         Vente saved = venteRepository.save(vente);
+        notifierAnnulation(saved, utilisateurId, motif);
         fideliteService.annulerMouvementsPourVente(venteId);
         notificationService.notifierVenteAnnulee(Map.of("venteId", venteId, "montant", vente.getMontantTotal()));
         notificationService.notifierMiseAJourDashboard();
@@ -1664,5 +1667,40 @@ public class VenteServiceImpl implements VenteService {
                 .sorted()
                 .forEach(id -> produitRepository.findById(id)
                         .ifPresent(p -> entityManager.refresh(p, LockModeType.PESSIMISTIC_WRITE)));
+    }
+
+    /** Prévient gérants et vendeurs (liste des notifications + téléphones) qu'une vente a été annulée. */
+    private void notifierAnnulation(Vente vente, Long utilisateurId, String motif) {
+        try {
+            String qui = utilisateurId == null ? null : utilisateurRepository.findById(utilisateurId)
+                    .map(Utilisateur::getNomComplet).orElse(null);
+            long montant = Math.round(vente.getMontantTotal() != null ? vente.getMontantTotal() : 0.0);
+            String message = "N° " + vente.getNumeroVente() + " — " + String.format("%,d", montant).replace(',', ' ') + " FCFA"
+                    + (qui != null ? ", annulée par " + qui : "")
+                    + (motif != null && !motif.isBlank() ? " (" + motif + ")" : "");
+            String titre = Boolean.TRUE.equals(vente.getEstCredit()) ? "Crédit annulé" : "Vente annulée";
+            // Créée seulement une fois l'annulation enregistrée, dans sa propre transaction :
+            // un souci de notification ne peut jamais faire échouer l'annulation.
+            Runnable creer = () -> {
+                try {
+                    notificationPersistance.creerDansNouvelleTransaction("VENTE_ANNULEE", titre, message, "/pages/vente");
+                } catch (Exception e) {
+                    log.warn("Notification d'annulation non créée : {}", e.getMessage());
+                }
+            };
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() {
+                                creer.run();
+                            }
+                        });
+            } else {
+                creer.run();
+            }
+        } catch (Exception e) {
+            log.warn("Notification d'annulation non créée : {}", e.getMessage());
+        }
     }
 }

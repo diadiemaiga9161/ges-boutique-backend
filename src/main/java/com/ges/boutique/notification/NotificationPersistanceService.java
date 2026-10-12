@@ -1,9 +1,11 @@
 package com.ges.boutique.notification;
 
 import com.ges.boutique.config.NotificationService;
+import com.ges.boutique.push.PushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
@@ -17,6 +19,7 @@ public class NotificationPersistanceService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationService wsNotificationService;
+    private final PushService pushService;
 
     @Transactional
     public Notification creer(String type, String titre, String message, String lien) {
@@ -32,8 +35,15 @@ public class NotificationPersistanceService {
         data.put("dateCreation", saved.getDateCreation().toString());
         data.put("countNonLues", notificationRepository.countNonLues());
         wsNotificationService.notifierNouvelleNotification(data);
+        pushService.envoyerATous(saved.getTitre(), saved.getMessage(), lienMobile(saved.getType()));
 
         return saved;
+    }
+
+    /** Même chose dans une transaction à part : pour créer une notification après coup (afterCommit). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification creerDansNouvelleTransaction(String type, String titre, String message, String lien) {
+        return creer(type, titre, message, lien);
     }
 
     @Transactional
@@ -57,6 +67,7 @@ public class NotificationPersistanceService {
         data.put("dateCreation", saved.getDateCreation().toString());
         data.put("countNonLues", notificationRepository.countNonLues());
         wsNotificationService.notifierNouvelleNotification(data);
+        pushService.envoyerATous(saved.getTitre(), saved.getMessage(), lienMobile(saved.getType()));
     }
 
     @Transactional
@@ -80,6 +91,7 @@ public class NotificationPersistanceService {
         data.put("dateCreation", saved.getDateCreation().toString());
         data.put("countNonLues", notificationRepository.countNonLues());
         wsNotificationService.notifierNouvelleNotification(data);
+        pushService.envoyerATous(saved.getTitre(), saved.getMessage(), lienMobile(saved.getType()));
     }
 
     public List<Notification> getNonLues() {
@@ -117,5 +129,16 @@ public class NotificationPersistanceService {
         Map<String, Object> data = new HashMap<>();
         data.put("countNonLues", 0L);
         wsNotificationService.notifierNouvelleNotification(data);
+    }
+
+    /** Page de l'appli mobile ouverte quand on touche la notification sur le téléphone. */
+    private static String lienMobile(String type) {
+        if (type == null) return "/mobile/notifications";
+        if (type.startsWith("STOCK") || type.startsWith("RUPTURE")) return "/mobile/tabs/products";
+        if (type.startsWith("COMMANDE")) return "/mobile/commandes";
+        if (type.startsWith("TRANSFERT")) return "/mobile/transferts";
+        if (type.startsWith("VENTE")) return "/mobile/tabs/sales";
+        if (type.startsWith("RESUME")) return "/mobile/tabs/caisse";
+        return "/mobile/notifications";
     }
 }
