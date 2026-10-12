@@ -1,6 +1,7 @@
 package com.ges.boutique.push;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ges.boutique.utilisateur.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class PushService {
     private final PushAbonnementRepository abonnementRepository;
     private final PushCleVapidRepository cleRepository;
     private final ObjectMapper objectMapper;
+    private final UtilisateurRepository utilisateurRepository;
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final ExecutorService envois = Executors.newSingleThreadExecutor(r -> {
@@ -96,6 +98,13 @@ public class PushService {
             if (abonnes.isEmpty()) return;
             byte[] contenu = contenu(titre, message, url);
             for (PushAbonnement a : abonnes) {
+                // Compte supprimé ou désactivé : ce téléphone ne doit plus recevoir les alertes.
+                boolean compteActif = a.getUtilisateurId() != null && utilisateurRepository.findById(a.getUtilisateurId())
+                        .map(u -> u.isActif()).orElse(false);
+                if (!compteActif) {
+                    abonnementRepository.deleteByEndpoint(a.getEndpoint());
+                    continue;
+                }
                 envoyer(a, contenu);
             }
         } catch (Exception e) {
