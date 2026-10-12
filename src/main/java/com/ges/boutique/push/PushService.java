@@ -187,7 +187,7 @@ public class PushService {
     private byte[] contenu(String titre, String message, String url) throws Exception {
         Map<String, Object> clic = Map.of("default", Map.of(
                 "operation", "navigateLastFocusedOrOpen",
-                "url", url != null ? url : "/mobile/notifications"));
+                "url", url != null ? url : "/mobile/tabs/notifications"));
         Map<String, Object> notification = new LinkedHashMap<>();
         notification.put("title", titre);
         notification.put("body", message);

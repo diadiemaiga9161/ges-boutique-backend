@@ -133,12 +133,12 @@ public class NotificationPersistanceService {
 
     /** Page de l'appli mobile ouverte quand on touche la notification sur le téléphone. */
     private static String lienMobile(String type) {
-        if (type == null) return "/mobile/notifications";
-        if (type.startsWith("STOCK") || type.startsWith("RUPTURE")) return "/mobile/tabs/products";
+        if (type == null) return "/mobile/tabs/notifications";
+        if (type.startsWith("STOCK") || type.startsWith("RUPTURE") || type.startsWith("PEREMPTION")) return "/mobile/tabs/products";
         if (type.startsWith("COMMANDE")) return "/mobile/commandes";
-        if (type.startsWith("TRANSFERT")) return "/mobile/transferts";
+        if (type.startsWith("TRANSFERT")) return "/mobile/tabs/transferts";
         if (type.startsWith("VENTE")) return "/mobile/tabs/sales";
         if (type.startsWith("RESUME")) return "/mobile/tabs/caisse";
-        return "/mobile/notifications";
+        return "/mobile/tabs/notifications";
     }
 }
