@@ -32,6 +32,7 @@ public class ProduitController {
     private final ProduitService produitService;
     private final CategorieService categorieService;
     private final ProduitRepository produitRepository;
+    private final CodeBarreService codeBarreService;
 
     // ==================== PRODUITS ====================
 
@@ -436,6 +437,16 @@ public class ProduitController {
     public ResponseEntity<List<ProduitDto>> obtenirProduitsBioDto() {
         List<Produit> produits = produitService.obtenirProduitsBio();
         return ResponseEntity.ok(produitService.convertirListeEnDto(produits));
+    }
+
+    /** Crée un code-barres (EAN-13 interne) pour les produits qui n'en ont pas (tous, ou ceux listés). */
+    @PostMapping("/codes-barres/generer")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> genererCodesBarres(@RequestBody(required = false) Map<String, List<Number>> corps) {
+        List<Long> ids = corps == null || corps.get("produitIds") == null ? null
+                : corps.get("produitIds").stream().map(Number::longValue).toList();
+        List<Map<String, Object>> crees = codeBarreService.genererManquants(ids);
+        return ResponseEntity.ok(Map.of("nombreCrees", crees.size(), "produits", crees));
     }
 
     @GetMapping("/code-barre/{codeBarre}")
