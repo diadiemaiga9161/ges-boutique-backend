@@ -140,6 +140,9 @@ public class VenteMapper {
         map.put("remiseMontant", ligne.getRemiseMontant());
         map.put("montantRemise", ligne.getMontantRemise());
         map.put("benefice", ligne.getBenefice());
+        map.put("id", ligne.getId());
+        map.put("remiseOffre", ligne.getRemiseOffre());
+        map.put("offreLibelle", ligne.getOffreLibelle());
         return map;
     }
 

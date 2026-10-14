@@ -24,9 +24,9 @@ public interface LigneVenteRepository extends JpaRepository<LigneVente, Long> {
     // (prix − prix d'achat actuel du produit) × quantité, formule des rapports des applis.
     @Query("SELECT p.id, p.nom, p.modeMesure, COALESCE(SUM(l.quantite), 0), COALESCE(SUM(l.sousTotal), 0), " +
            "COALESCE(SUM(((CASE WHEN l.prixApresRemise IS NULL OR l.prixApresRemise = 0 THEN COALESCE(l.prixUnitaire, 0) ELSE l.prixApresRemise END) " +
-           "- COALESCE(p.prixAchat, 0)) * l.quantite), 0), " +
+           "- COALESCE(p.prixAchat, 0)) * l.quantite - COALESCE(l.remiseOffre, 0)), 0), " +
            "c.nom, " +
-           "COALESCE(SUM((CASE WHEN l.prixApresRemise IS NULL OR l.prixApresRemise = 0 THEN COALESCE(l.prixUnitaire, 0) ELSE l.prixApresRemise END) * l.quantite), 0) " +
+           "COALESCE(SUM((CASE WHEN l.prixApresRemise IS NULL OR l.prixApresRemise = 0 THEN COALESCE(l.prixUnitaire, 0) ELSE l.prixApresRemise END) * l.quantite - COALESCE(l.remiseOffre, 0)), 0) " +
            "FROM LigneVente l JOIN l.vente v LEFT JOIN l.produit p LEFT JOIN p.categorie c " +
            "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
            "GROUP BY p.id, p.nom, p.modeMesure, c.nom")
@@ -35,7 +35,7 @@ public interface LigneVenteRepository extends JpaRepository<LigneVente, Long> {
     // Bénéfice des lignes des ventes sans bénéfice enregistré (formule du site : prix d'achat
     // actuel du produit, sinon celui de la ligne).
     @Query("SELECT COALESCE(SUM(((CASE WHEN l.prixApresRemise IS NULL OR l.prixApresRemise = 0 THEN COALESCE(l.prixUnitaire, 0) ELSE l.prixApresRemise END) " +
-           "- (CASE WHEN p.prixAchat IS NULL OR p.prixAchat = 0 THEN COALESCE(l.prixAchat, 0) ELSE p.prixAchat END)) * l.quantite), 0) " +
+           "- (CASE WHEN p.prixAchat IS NULL OR p.prixAchat = 0 THEN COALESCE(l.prixAchat, 0) ELSE p.prixAchat END)) * l.quantite - COALESCE(l.remiseOffre, 0)), 0) " +
            "FROM LigneVente l JOIN l.vente v LEFT JOIN l.produit p " +
            "WHERE v.dateVente BETWEEN :debut AND :fin AND (v.annulee IS NULL OR v.annulee = false) " +
            "AND (v.beneficeTotal IS NULL OR v.beneficeTotal = 0)")

@@ -32,6 +32,11 @@ public class RetourVenteController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/apercu")
+    public ResponseEntity<Map<String, Object>> apercu(@RequestBody RetourVenteRequest request) {
+        return ResponseEntity.ok(retourVenteService.apercu(request));
+    }
+
     @GetMapping("/vente/{venteId}")
     public ResponseEntity<Map<String, Object>> getRetoursByVente(@PathVariable Long venteId) {
         List<RetourVente> retours = retourVenteService.getRetoursByVente(venteId);

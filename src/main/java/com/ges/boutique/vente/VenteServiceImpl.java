@@ -66,6 +66,7 @@ public class VenteServiceImpl implements VenteService {
     private final StockWebSocketService stockWebSocketService;
     private final JournalAuditService journalAuditService;
     private final FideliteService fideliteService;
+    private final com.ges.boutique.offre.OffreQuantiteService offreQuantiteService;
 
     /** Identifiant de la boutique courante (1 instance = 1 boutique dans cette architecture). */
     private static final Long BOUTIQUE_ID = 1L;
@@ -1234,6 +1235,9 @@ public class VenteServiceImpl implements VenteService {
         } else {
             ligne.calculerSousTotal();
         }
+        // Offre par quantité du gérant (« 2 pour 75 F ») : appliquée ici, côté serveur, quel que
+        // soit ce que l'appli a envoyé ; sans offre, la ligne reste exactement comme avant.
+        offreQuantiteService.appliquer(ligne);
 
         return ligne;
     }

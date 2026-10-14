@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -65,6 +68,7 @@ public class RetourVenteServiceImpl {
         // utiliser le coût réel de l'article au moment de la vente".
         double totalBeneficeRetourne = 0.0;
         List<LigneRetourVente> lignes = new ArrayList<>();
+        Map<Long, Integer> dejaRendusDansDemande = new HashMap<>();
 
         for (RetourVenteRequest.LigneRetourVenteRequest ligneReq : request.getLignes()) {
             log.info("Traitement ligne - Produit ID: {}", ligneReq.getProduitId());
@@ -83,8 +87,22 @@ public class RetourVenteServiceImpl {
             ligne.setProduit(produit);
             ligne.setLigneVenteId(ligneReq.getLigneVenteId());
             ligne.setQuantiteRetournee(ligneReq.getQuantiteRetournee());
-            ligne.setPrixUnitaire(ligneReq.getPrixUnitaire());
-            ligne.setSousTotal(ligneReq.getQuantiteRetournee() * ligneReq.getPrixUnitaire());
+            // Produit vendu avec une offre par quantité : le montant rendu est calculé ici
+            // (ce que le client avait payé moins le prix de ce qu'il garde), jamais celui de l'appli.
+            LigneVente ligneOffre = ligneAvecOffre(vente, ligneReq);
+            if (ligneOffre != null) {
+                int k = ligneReq.getQuantiteRetournee();
+                double montant = montantOffreRetour(vente, ligneOffre, k, dejaRendusDansDemande);
+                dejaRendusDansDemande.merge(ligneOffre.getId(), k, Integer::sum);
+                ligne.setLigneVenteId(ligneOffre.getId());
+                ligne.setPrixUnitaire(montant / k);
+                ligne.setSousTotal(montant);
+                double prixAchat = ligneOffre.getPrixAchat() != null ? ligneOffre.getPrixAchat() : 0.0;
+                totalBeneficeRetourne += montant - prixAchat * k;
+            } else {
+                ligne.setPrixUnitaire(ligneReq.getPrixUnitaire());
+                ligne.setSousTotal(ligneReq.getQuantiteRetournee() * ligneReq.getPrixUnitaire());
+            }
             totalRetour += ligne.getSousTotal();
             lignes.add(ligne);
 
@@ -94,7 +112,9 @@ public class RetourVenteServiceImpl {
             String motifRetourStock = "Retour vente " + vente.getNumeroVente() + " - " + produit.getNom();
             inventaireService.retourStock(produit.getId(), ligneReq.getQuantiteRetournee(), request.getUtilisateurId(), motifRetourStock);
 
-            totalBeneficeRetourne += calculerBeneficeRetourneLigne(ligneReq, produit);
+            if (ligneOffre == null) {
+                totalBeneficeRetourne += calculerBeneficeRetourneLigne(ligneReq, produit);
+            }
         }
 
         retour.setLignes(lignes);
@@ -167,6 +187,82 @@ public class RetourVenteServiceImpl {
         log.info("Retour sauvegardé avec ID: {}", saved.getId());
 
         return saved;
+    }
+
+    /**
+     * Montant qui sera rendu, sans rien enregistrer : la caisse l'affiche avant de confirmer,
+     * pour que la personne rende exactement ce que le serveur va compter.
+     */
+    public Map<String, Object> apercu(RetourVenteRequest request) {
+        Vente vente = venteRepository.findById(request.getVenteId())
+                .orElseThrow(() -> new RessourceIntrouvableException("Vente introuvable: " + request.getVenteId()));
+        Map<Long, Integer> dejaRendusDansDemande = new HashMap<>();
+        List<Map<String, Object>> details = new ArrayList<>();
+        double total = 0.0;
+        List<RetourVenteRequest.LigneRetourVenteRequest> demandees =
+                request.getLignes() == null ? List.of() : request.getLignes();
+        for (RetourVenteRequest.LigneRetourVenteRequest ligneReq : demandees) {
+            int k = ligneReq.getQuantiteRetournee() == null ? 0 : ligneReq.getQuantiteRetournee();
+            if (k <= 0) continue;
+            LigneVente ligneOffre = ligneAvecOffre(vente, ligneReq);
+            double montant;
+            if (ligneOffre != null) {
+                montant = montantOffreRetour(vente, ligneOffre, k, dejaRendusDansDemande);
+                dejaRendusDansDemande.merge(ligneOffre.getId(), k, Integer::sum);
+            } else {
+                montant = k * (ligneReq.getPrixUnitaire() != null ? ligneReq.getPrixUnitaire() : 0.0);
+            }
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("produitId", ligneReq.getProduitId());
+            d.put("quantiteRetournee", k);
+            d.put("montant", montant);
+            d.put("offre", ligneOffre != null ? ligneOffre.getOffreLibelle() : null);
+            details.add(d);
+            total += montant;
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("montantTotal", total);
+        res.put("lignes", details);
+        return res;
+    }
+
+    /** Ligne de la vente concernée si elle a été vendue avec une offre par quantité, sinon null. */
+    private LigneVente ligneAvecOffre(Vente vente, RetourVenteRequest.LigneRetourVenteRequest ligneReq) {
+        if (vente.getLignes() == null || ligneReq.getProduitId() == null) return null;
+        LigneVente trouvee = null;
+        if (ligneReq.getLigneVenteId() != null) {
+            trouvee = vente.getLignes().stream()
+                    .filter(l -> ligneReq.getLigneVenteId().equals(l.getId())
+                            && l.getProduit() != null && ligneReq.getProduitId().equals(l.getProduit().getId()))
+                    .findFirst().orElse(null);
+        }
+        if (trouvee == null) {
+            trouvee = vente.getLignes().stream()
+                    .filter(l -> l.getProduit() != null && ligneReq.getProduitId().equals(l.getProduit().getId())
+                            && l.getOffrePaliers() != null && l.getRemiseOffre() != null && l.getRemiseOffre() > 0)
+                    .findFirst().orElse(null);
+        }
+        if (trouvee == null || trouvee.getOffrePaliers() == null
+                || trouvee.getRemiseOffre() == null || trouvee.getRemiseOffre() <= 0) return null;
+        return trouvee;
+    }
+
+    private double montantOffreRetour(Vente vente, LigneVente ligne, int k, Map<Long, Integer> dejaRendusDansDemande) {
+        Long produitId = ligne.getProduit().getId();
+        int dejaRendus = retourVenteRepository.findByVenteIdOrderByDateRetourDesc(vente.getId()).stream()
+                .flatMap(r -> r.getLignes().stream())
+                .filter(lr -> ligne.getId().equals(lr.getLigneVenteId())
+                        || (lr.getLigneVenteId() == null && lr.getProduit() != null
+                            && produitId.equals(lr.getProduit().getId())))
+                .mapToInt(lr -> lr.getQuantiteRetournee() != null ? lr.getQuantiteRetournee() : 0)
+                .sum()
+                + dejaRendusDansDemande.getOrDefault(ligne.getId(), 0);
+        int restant = (ligne.getQuantite() == null ? 0 : ligne.getQuantite()) - dejaRendus;
+        if (k > restant) {
+            throw new IllegalArgumentException("Quantité retournée trop grande pour « " + ligne.getProduitNom()
+                    + " » : il en reste " + Math.max(0, restant) + " à rendre sur cette vente.");
+        }
+        return com.ges.boutique.offre.OffreQuantiteService.montantRetour(ligne, k, dejaRendus);
     }
 
     public List<RetourVente> getRetoursByVente(Long venteId) {

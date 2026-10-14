@@ -65,6 +65,17 @@ public class LigneVente {
     @Column(name = "niveau_id")
     private Long niveauId; // ID du ProduitNiveau vendu (null = vente au niveau produit de base)
 
+    /** Réduction totale de la ligne due à une offre par quantité (ex: 25 pour « 2 pour 75 »). */
+    @Column(name = "remise_offre")
+    private Double remiseOffre = 0.0;
+
+    @Column(name = "offre_libelle", length = 160)
+    private String offreLibelle;
+
+    /** Paliers de l'offre le jour de la vente (« 2:75;5:150 »), pour calculer un retour. */
+    @Column(name = "offre_paliers", length = 160)
+    private String offrePaliers;
+
     @PrePersist
     @PreUpdate
     protected void calculerSousTotal() {
@@ -98,8 +109,9 @@ public class LigneVente {
             prixApresRemise = 0.0;
         }
 
-        sousTotal = prixApresRemise * quantite;
-        benefice = (prixApresRemise - prixAchat) * quantite;
+        double reductionOffre = remiseOffre != null && remiseOffre > 0 ? remiseOffre : 0.0;
+        sousTotal = Math.max(0, prixApresRemise * quantite - reductionOffre);
+        benefice = sousTotal - prixAchat * quantite;
 
         sousTotal = BigDecimal.valueOf(sousTotal)
                 .setScale(2, RoundingMode.HALF_UP)
@@ -110,6 +122,14 @@ public class LigneVente {
         benefice = BigDecimal.valueOf(benefice)
                 .setScale(2, RoundingMode.HALF_UP)
                 .doubleValue();
+    }
+
+    /** Offre par quantité du gérant (voir OffreQuantiteService) : remise totale de la ligne. */
+    public void appliquerRemiseOffre(double remise, String libelle, String paliers) {
+        this.remiseOffre = remise;
+        this.offreLibelle = libelle;
+        this.offrePaliers = paliers;
+        calculerSousTotal();
     }
 
     public void appliquerRemisePourcentage(Double pourcentage) {
