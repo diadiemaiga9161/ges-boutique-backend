@@ -32,7 +32,8 @@ public enum CleFonctionnalite {
     CLIENTS_ABSENTS("Clients qui ne viennent plus"),
     PLANNING("Planning de l'équipe"),
     MODE_ENTRAINEMENT("Mode entraînement des vendeurs"),
-    DEVIS("Devis (pro forma) pour écoles, mairies, ONG");
+    DEVIS("Devis (pro forma) pour écoles, mairies, ONG"),
+    VENTE_VOIX("Vendre à la voix (français)");
 
     private final String libelle;
 

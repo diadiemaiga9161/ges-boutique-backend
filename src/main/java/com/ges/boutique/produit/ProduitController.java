@@ -64,6 +64,7 @@ public class ProduitController {
             map.put("bio", p.isBio());
             map.put("origine", p.getOrigine());
             map.put("typeVente", p.getTypeVente());
+            map.put("surnoms", p.getSurnoms());
             map.put("dateAjout", p.getDateAjout() != null ? p.getDateAjout().toString() : null);
             map.put("dateModification", p.getDateModification() != null ? p.getDateModification().toString() : null);
 

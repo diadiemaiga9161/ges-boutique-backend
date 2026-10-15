@@ -66,6 +66,12 @@ public class Produit {
     @Column(name = "seuil_alerte")
     private Integer seuilAlerte = 10;
 
+    // Autres noms du produit pour la vente à la voix (ex : "nono, deguer"), séparés par des
+    // virgules, saisis par le gérant : noms de marque ou noms locaux que la reconnaissance
+    // vocale entend autrement que le nom enregistré.
+    @Column(name = "surnoms", length = 500)
+    private String surnoms;
+
     // Nom de l'unité de base pour l'affichage (ex: "Pièce", "Kg", "Litre") — voir
     // UniteVente pour les unités de vente alternatives (Carton, Cartouche...) définies
     // en plus de cette unité de base, chacune avec son propre facteur de conversion.
