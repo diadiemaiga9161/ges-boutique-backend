@@ -1,5 +1,6 @@
 package com.ges.boutique.vente;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,8 @@ public class RetourVenteController {
         log.info("=== REQUETE RETOUR RECUE ===");
         log.info("Vente ID: {}", request.getVenteId());
 
+        // L'auteur du retour est la personne connectée (pour la réconciliation de la caisse).
+        request.setUtilisateurId(UtilisateurConnecte.idOu(request.getUtilisateurId()));
         RetourVente retour = retourVenteService.effectuerRetour(request);
 
         Map<String, Object> response = new HashMap<>();

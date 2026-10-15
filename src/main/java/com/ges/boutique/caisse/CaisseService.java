@@ -120,4 +120,7 @@ public interface CaisseService {
 
     // Réconciliation caisse par vendeur (lecture seule, calcul à la volée)
     List<ReconciliationVendeurDTO> getReconciliationVendeurs(LocalDate date);
+
+    /** Réconciliation + contrôle : total à remettre + autres mouvements = variation du tiroir. */
+    java.util.Map<String, Object> getRapportReconciliation(LocalDate date);
 }

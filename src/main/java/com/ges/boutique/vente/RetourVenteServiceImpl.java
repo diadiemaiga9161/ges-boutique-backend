@@ -36,7 +36,9 @@ public class RetourVenteServiceImpl {
         log.info("=== EFFETUER RETOUR ===");
         log.info("Vente ID: {}", request.getVenteId());
 
-        Vente vente = venteRepository.findById(request.getVenteId())
+        // Vente verrouillée jusqu'à la fin du retour : un 2e retour envoyé en même temps (double
+        // clic, deux téléphones) attend, puis voit ce qui a déjà été rendu et est refusé s'il est en trop.
+        Vente vente = venteRepository.findByIdPourMiseAJour(request.getVenteId())
                 .orElseThrow(() -> new RessourceIntrouvableException("Vente introuvable: " + request.getVenteId()));
 
         if (Boolean.TRUE.equals(vente.getAnnulee())) {
@@ -46,6 +48,7 @@ public class RetourVenteServiceImpl {
         if (request.getLignes() == null || request.getLignes().isEmpty()) {
             throw new IllegalArgumentException("Au moins une ligne de retour est requise");
         }
+        verifierQuantitesRendables(vente, request);
 
         RetourVente retour = new RetourVente();
         retour.setVente(vente);
@@ -193,9 +196,13 @@ public class RetourVenteServiceImpl {
      * Montant qui sera rendu, sans rien enregistrer : la caisse l'affiche avant de confirmer,
      * pour que la personne rende exactement ce que le serveur va compter.
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> apercu(RetourVenteRequest request) {
         Vente vente = venteRepository.findById(request.getVenteId())
                 .orElseThrow(() -> new RessourceIntrouvableException("Vente introuvable: " + request.getVenteId()));
+        if (request.getLignes() != null && !request.getLignes().isEmpty()) {
+            verifierQuantitesRendables(vente, request);
+        }
         Map<Long, Integer> dejaRendusDansDemande = new HashMap<>();
         List<Map<String, Object>> details = new ArrayList<>();
         double total = 0.0;
@@ -224,6 +231,49 @@ public class RetourVenteServiceImpl {
         res.put("montantTotal", total);
         res.put("lignes", details);
         return res;
+    }
+
+    /**
+     * Refuse un retour qui rendrait, pour un produit, plus que ce qui a été vendu moins ce qui a
+     * déjà été rendu (retours précédents + lignes de cette même demande).
+     */
+    private void verifierQuantitesRendables(Vente vente, RetourVenteRequest request) {
+        Map<Long, Integer> vendu = new HashMap<>();
+        Map<Long, String> noms = new HashMap<>();
+        if (vente.getLignes() != null) {
+            for (LigneVente l : vente.getLignes()) {
+                if (l.getProduit() == null || l.getProduit().getId() == null) continue;
+                vendu.merge(l.getProduit().getId(), l.getQuantite() != null ? l.getQuantite() : 0, Integer::sum);
+                noms.putIfAbsent(l.getProduit().getId(), l.getProduit().getNom());
+            }
+        }
+        Map<Long, Integer> dejaRendu = new HashMap<>();
+        for (RetourVente r : retourVenteRepository.findByVenteIdOrderByDateRetourDesc(vente.getId())) {
+            for (LigneRetourVente lr : r.getLignes()) {
+                if (lr.getProduit() == null) continue;
+                dejaRendu.merge(lr.getProduit().getId(), lr.getQuantiteRetournee() != null ? lr.getQuantiteRetournee() : 0, Integer::sum);
+            }
+        }
+        Map<Long, Integer> demande = new HashMap<>();
+        for (RetourVenteRequest.LigneRetourVenteRequest l : request.getLignes()) {
+            if (l.getProduitId() == null || l.getQuantiteRetournee() == null) continue;
+            demande.merge(l.getProduitId(), l.getQuantiteRetournee(), Integer::sum);
+        }
+        for (Map.Entry<Long, Integer> e : demande.entrySet()) {
+            Long produitId = e.getKey();
+            Integer v = vendu.get(produitId);
+            if (v == null) {
+                throw new IllegalArgumentException("Ce produit ne fait pas partie de la vente " + vente.getNumeroVente() + ".");
+            }
+            int rendu = dejaRendu.getOrDefault(produitId, 0);
+            int reste = Math.max(0, v - rendu);
+            if (e.getValue() > reste) {
+                String nom = noms.getOrDefault(produitId, "ce produit");
+                throw new IllegalArgumentException(reste == 0
+                        ? "« " + nom + " » a déjà été entièrement rendu (" + rendu + " sur " + v + " vendus)."
+                        : "« " + nom + " » : " + rendu + " déjà rendu(s) sur " + v + " vendu(s), vous pouvez encore en rendre " + reste + ".");
+            }
+        }
     }
 
     /** Ligne de la vente concernée si elle a été vendue avec une offre par quantité, sinon null. */

@@ -1,5 +1,6 @@
 package com.ges.boutique.employe;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,7 @@ public class PaiementEmployeController {
             @PathVariable Long id,
             @RequestParam(required = false) String motif,
             @RequestParam(required = false) Long utilisateurId) {
-        return ResponseEntity.ok(paiementService.annulerPaiement(id, motif, utilisateurId));
+        return ResponseEntity.ok(paiementService.annulerPaiement(id, motif, UtilisateurConnecte.idOu(utilisateurId)));
     }
 
     @GetMapping("/{id}")

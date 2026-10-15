@@ -102,6 +102,14 @@ public class OperationCaisse {
     @PrePersist
     protected void onCreate() {
         dateOperation = LocalDateTime.now();
+        // Auteur = la personne connectée, jamais l'identifiant envoyé par l'appli (souvent vide ou
+        // faux) : la réconciliation de la caisse sait ainsi qui a sorti l'argent. Exception : une
+        // vente reste au nom du vendeur de la vente, même enregistrée par le gérant.
+        Utilisateur connecte = com.ges.boutique.securite.UtilisateurConnecte.actuel();
+        boolean vente = type == TypeOperationCaisse.VENTE_COMPTANT || type == TypeOperationCaisse.VENTE_CREDIT;
+        if (connecte != null && !(vente && utilisateur != null)) {
+            utilisateur = connecte;
+        }
         if (type == TypeOperationCaisse.VENTE_CREDIT) {
             if (montantVerse == null) {
                 montantVerse = 0.0;

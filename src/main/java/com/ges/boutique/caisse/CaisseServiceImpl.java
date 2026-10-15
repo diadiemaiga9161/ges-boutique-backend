@@ -2104,8 +2104,7 @@ public class CaisseServiceImpl implements CaisseService {
      * Aucune nouvelle table : agrège les Vente (ventes comptant/crédit du jour) et les
      * OperationCaisse de type REGLEMENT_CREDIT (règlements de crédit encaissés en espèces).
      */
-    @Override
-    public List<ReconciliationVendeurDTO> getReconciliationVendeurs(LocalDate date) {
+    private List<ReconciliationVendeurDTO> calculerReconciliation(LocalDate date, Map<String, Object> controleSortie) {
         LocalDate dateCible = date != null ? date : LocalDate.now();
         LocalDateTime debut = dateCible.atStartOfDay();
         LocalDateTime fin = dateCible.atTime(LocalTime.MAX);
@@ -2157,13 +2156,125 @@ public class CaisseServiceImpl implements CaisseService {
             dto.setTotalReglementsCreditEspeces(arrondir(dto.getTotalReglementsCreditEspeces() + montant));
         }
 
-        List<ReconciliationVendeurDTO> resultat = new ArrayList<>(parVendeur.values());
-        for (ReconciliationVendeurDTO dto : resultat) {
-            dto.setTotalAiRemettre(arrondir(dto.getTotalVentesEspeces() + dto.getTotalReglementsCreditEspeces()));
+        // 3) Argent réellement entré / sorti du tiroir ce jour, par personne : même base que la
+        //    « Différence » de la caisse du jour (effet réel de chaque opération). L'« à remettre »
+        //    de chacun est cet argent réel ; les lignes ventes / règlements / retours l'expliquent.
+        Map<Long, Double> tiroirParPersonne = new HashMap<>();
+        Map<Long, Double> retoursParPersonne = new HashMap<>();
+        Map<Long, String> nomsPersonnes = new HashMap<>();
+        Map<String, Double> autresMouvements = new LinkedHashMap<>();
+        double depotBanque = 0.0;
+        double variationTiroir = 0.0;
+        for (OperationCaisse op : operationRepository.findOperationsParPeriode(debut, fin)) {
+            double effet = (op.getSoldeApres() != null ? op.getSoldeApres() : 0.0)
+                    - (op.getSoldeAvant() != null ? op.getSoldeAvant() : 0.0);
+            if (op.getType() == TypeOperationCaisse.VIREMENT_BANQUE) {
+                depotBanque -= effet;
+                continue;
+            }
+            variationTiroir += effet;
+            if (estMouvementDeVente(op)) {
+                Long id = op.getUtilisateur() != null ? op.getUtilisateur().getId() : null;
+                if (op.getUtilisateur() != null) nomsPersonnes.putIfAbsent(id, op.getUtilisateur().getNomComplet());
+                tiroirParPersonne.merge(id == null ? SANS_NOM : id, effet, Double::sum);
+                if (op.getType() == TypeOperationCaisse.REMBOURSEMENT_RETOUR) {
+                    retoursParPersonne.merge(id == null ? SANS_NOM : id, -effet, Double::sum);
+                }
+            } else if (Math.abs(effet) >= 0.005) {
+                autresMouvements.merge(libelleMouvement(op.getType()), effet, Double::sum);
+            }
         }
-        resultat.sort(Comparator.comparing(ReconciliationVendeurDTO::getVendeurNom, String.CASE_INSENSITIVE_ORDER));
+
+        for (Map.Entry<Long, Double> e : tiroirParPersonne.entrySet()) {
+            Long id = e.getKey();
+            ReconciliationVendeurDTO dto = parVendeur.computeIfAbsent(id,
+                    k -> new ReconciliationVendeurDTO(k.equals(SANS_NOM) ? null : k,
+                            k.equals(SANS_NOM) ? "Sans nom (anciennes opérations)" : nomsPersonnes.getOrDefault(k, "Utilisateur " + k),
+                            0L, 0.0, 0.0, 0.0, 0.0));
+        }
+
+        List<ReconciliationVendeurDTO> resultat = new ArrayList<>();
+        for (Map.Entry<Long, ReconciliationVendeurDTO> e : parVendeur.entrySet()) {
+            ReconciliationVendeurDTO dto = e.getValue();
+            double retours = arrondir(retoursParPersonne.getOrDefault(e.getKey(), 0.0));
+            double attendu = dto.getTotalVentesEspeces() + dto.getTotalReglementsCreditEspeces() - retours;
+            double reel = tiroirParPersonne.getOrDefault(e.getKey(), 0.0);
+            dto.setTotalRetoursRembourses(retours);
+            dto.setTotalAutresMouvementsVentes(arrondir(reel - attendu));
+            dto.setTotalAiRemettre(arrondir(reel));
+            resultat.add(dto);
+        }
+        resultat.sort(Comparator.comparing((ReconciliationVendeurDTO d) -> d.getVendeurId() == null)
+                .thenComparing(ReconciliationVendeurDTO::getVendeurNom, String.CASE_INSENSITIVE_ORDER));
+
+        double totalARemettre = resultat.stream().mapToDouble(ReconciliationVendeurDTO::getTotalAiRemettre).sum();
+        double totalAutres = autresMouvements.values().stream().mapToDouble(Double::doubleValue).sum();
+        List<Map<String, Object>> autres = new ArrayList<>();
+        autresMouvements.forEach((libelle, montant) -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("libelle", libelle);
+            m.put("montant", arrondir(montant));
+            autres.add(m);
+        });
+        Map<String, Object> controle = new LinkedHashMap<>();
+        controle.put("totalARemettre", arrondir(totalARemettre));
+        controle.put("autresMouvements", autres);
+        controle.put("totalAutresMouvements", arrondir(totalAutres));
+        controle.put("variationTiroir", arrondir(variationTiroir));
+        controle.put("depotBanque", arrondir(depotBanque));
+        controle.put("ecart", arrondir(variationTiroir - totalARemettre - totalAutres));
+        if (controleSortie != null) controleSortie.putAll(controle);
 
         return resultat;
+    }
+
+    /** Identifiant réservé aux opérations sans auteur connu (anciens retours, etc.). */
+    private static final Long SANS_NOM = -1L;
+
+    @Override
+    public List<ReconciliationVendeurDTO> getReconciliationVendeurs(LocalDate date) {
+        return calculerReconciliation(date, null);
+    }
+
+    @Override
+    public Map<String, Object> getRapportReconciliation(LocalDate date) {
+        Map<String, Object> controle = new LinkedHashMap<>();
+        List<ReconciliationVendeurDTO> liste = calculerReconciliation(date, controle);
+        Map<String, Object> rapport = new LinkedHashMap<>();
+        rapport.put("reconciliation", liste);
+        rapport.put("controle", controle);
+        return rapport;
+    }
+
+    /** Mouvements du tiroir faits par un vendeur dans le cadre de son activité de vente. */
+    private static boolean estMouvementDeVente(OperationCaisse op) {
+        TypeOperationCaisse t = op.getType();
+        if (t == TypeOperationCaisse.VENTE_COMPTANT || t == TypeOperationCaisse.VENTE_CREDIT
+                || t == TypeOperationCaisse.REGLEMENT_CREDIT || t == TypeOperationCaisse.ANNULATION_VENTE
+                || t == TypeOperationCaisse.ANNULATION_CREDIT || t == TypeOperationCaisse.REMBOURSEMENT_RETOUR
+                || t == TypeOperationCaisse.REMBOURSEMENT_COMMANDE) {
+            return true;
+        }
+        // Compléments / remboursements écrits par la modification d'une vente (VenteServiceImpl).
+        String motif = op.getMotif() == null ? "" : op.getMotif();
+        return (t == TypeOperationCaisse.ENTREE || t == TypeOperationCaisse.SORTIE)
+                && (motif.startsWith("Complément modification vente") || motif.startsWith("Remboursement modification vente"));
+    }
+
+    private static String libelleMouvement(TypeOperationCaisse t) {
+        return switch (t) {
+            case DEPENSE -> "Dépenses";
+            case SORTIE -> "Sorties de caisse";
+            case ENTREE -> "Entrées de caisse";
+            case PAIEMENT_FOURNISSEUR -> "Paiements fournisseurs";
+            case AVANCE_FOURNISSEUR -> "Avances fournisseurs";
+            case PAIEMENT_EMPLOYE -> "Salaires payés";
+            case ANNULATION_PAIEMENT_EMPLOYE -> "Salaires annulés";
+            case AJUSTEMENT -> "Ajustements";
+            case AVANCE_CLIENT -> "Avances de clients";
+            case DEPOT, RETRAIT -> "Dépôts de garde";
+            default -> "Autres (" + t.name().toLowerCase().replace('_', ' ') + ")";
+        };
     }
 
     // ==================== ANNULATION RÈGLEMENT CRÉDIT ====================

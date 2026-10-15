@@ -1,5 +1,6 @@
 package com.ges.boutique.facture;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import com.ges.boutique.email.PdfFactureService;
 import com.ges.boutique.email.QrCodeService;
 import com.ges.boutique.exception.MessageErreurUtil;
@@ -44,7 +45,7 @@ public class FactureController {
             @PathVariable Long venteId,
             @RequestParam Long utilisateurId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFacture) {
-        return ResponseEntity.ok(factureService.creerFactureDepuisVente(venteId, dateFacture, utilisateurId));
+        return ResponseEntity.ok(factureService.creerFactureDepuisVente(venteId, dateFacture, UtilisateurConnecte.idOu(utilisateurId)));
     }
 
     // ==================== CONSULTATION ====================

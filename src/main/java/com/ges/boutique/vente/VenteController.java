@@ -1,5 +1,6 @@
 package com.ges.boutique.vente;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import com.ges.boutique.caisse.CaisseService;
 import com.ges.boutique.utilisateur.UtilisateurMapper;
 import com.ges.boutique.vente.dto.VenteAnnuleeDTO;
@@ -417,7 +418,7 @@ public class VenteController {
         }
 
         // Annuler la vente dans le service vente (gère aussi la répercussion caisse)
-        Vente venteAnnulee = venteService.annulerVente(venteId, utilisateurId, motif);
+        Vente venteAnnulee = venteService.annulerVente(venteId, UtilisateurConnecte.idOu(utilisateurId), motif);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -492,7 +493,7 @@ public class VenteController {
         }
 
         // Annuler le crédit dans le service vente (gère aussi la répercussion caisse)
-        Vente venteAnnulee = venteService.annulerVenteCredit(venteId, utilisateurId, motif);
+        Vente venteAnnulee = venteService.annulerVenteCredit(venteId, UtilisateurConnecte.idOu(utilisateurId), motif);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);

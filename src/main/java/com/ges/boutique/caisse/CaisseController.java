@@ -1,5 +1,6 @@
 package com.ges.boutique.caisse;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import com.ges.boutique.exception.MessageErreurUtil;
 import com.ges.boutique.exception.RessourceIntrouvableException;
 import com.ges.boutique.exception.SoldeInsuffisantException;
@@ -59,7 +60,7 @@ public class CaisseController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Fermer la caisse")
     public ResponseEntity<Map<String, Object>> fermerCaisse(@RequestParam(required = false) Long utilisateurId) {
-        Caisse caisse = caisseService.fermerCaisse(utilisateurId);
+        Caisse caisse = caisseService.fermerCaisse(UtilisateurConnecte.idOu(utilisateurId));
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "Caisse fermée avec succès");
@@ -73,7 +74,7 @@ public class CaisseController {
     public ResponseEntity<Map<String, Object>> verifierCaisse(@RequestBody VerificationCaisseRequest request) {
         Caisse caisse = caisseService.verifierCaisse(
                 request.getSoldeReelSaisi(),
-                request.getUtilisateurId(),
+                UtilisateurConnecte.idOu(request.getUtilisateurId()),
                 request.getObservations()
         );
         Map<String, Object> response = new HashMap<>();
@@ -127,7 +128,7 @@ public class CaisseController {
         OperationCaisse operation = caisseService.entreeCaisse(
                 request.getMontant(),
                 request.getMotif(),
-                request.getUtilisateurId(),
+                UtilisateurConnecte.idOu(request.getUtilisateurId()),
                 request.getModePaiement(),
                 request.getReferencePaiement()
         );
@@ -145,7 +146,7 @@ public class CaisseController {
         OperationCaisse operation = caisseService.sortieCaisse(
                 request.getMontant(),
                 request.getMotif(),
-                request.getUtilisateurId()
+                UtilisateurConnecte.idOu(request.getUtilisateurId())
         );
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -189,7 +190,7 @@ public class CaisseController {
         OperationCaisse reglement = caisseService.reglementCredit(
                 request.getVenteCreditId(),
                 request.getMontantRegle(),
-                request.getUtilisateurId(),
+                UtilisateurConnecte.idOu(request.getUtilisateurId()),
                 request.getModePaiement(),
                 request.getReferencePaiement(),
                 request.getMotif(),
@@ -240,7 +241,7 @@ public class CaisseController {
     public ResponseEntity<?> annulerReglementCredit(
             @PathVariable Long operationId,
             @RequestParam Long utilisateurId) {
-        return ResponseEntity.ok(caisseService.annulerReglementCredit(operationId, utilisateurId));
+        return ResponseEntity.ok(caisseService.annulerReglementCredit(operationId, UtilisateurConnecte.idOu(utilisateurId)));
     }
 
     // ==================== OPÉRATIONS PAR PÉRIODE ====================
@@ -498,11 +499,12 @@ public class CaisseController {
     public ResponseEntity<Map<String, Object>> getReconciliationVendeurs(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate dateCible = date != null ? date : LocalDate.now();
-        List<ReconciliationVendeurDTO> reconciliation = caisseService.getReconciliationVendeurs(dateCible);
+        Map<String, Object> rapport = caisseService.getRapportReconciliation(dateCible);
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("date", dateCible);
-        response.put("reconciliation", reconciliation);
+        response.put("reconciliation", rapport.get("reconciliation"));
+        response.put("controle", rapport.get("controle"));
         return ResponseEntity.ok(response);
     }
 

@@ -32,4 +32,19 @@ public class ReconciliationVendeurDTO {
 
     /** totalVentesEspeces + totalReglementsCreditEspeces : ce que le vendeur doit remettre en espèces en fin de journée. */
     private Double totalAiRemettre;
+
+    /** Argent rendu aux clients depuis le tiroir par cette personne pour des retours, ce jour. */
+    private Double totalRetoursRembourses = 0.0;
+
+    /**
+     * Autres mouvements du tiroir faits par cette personne autour des ventes (acomptes de crédit,
+     * annulations de ventes, compléments ou remboursements après modification d'une vente).
+     */
+    private Double totalAutresMouvementsVentes = 0.0;
+
+    public ReconciliationVendeurDTO(Long vendeurId, String vendeurNom, Long nombreVentes, Double totalVentesEspeces,
+                                    Double totalVentesCredit, Double totalReglementsCreditEspeces, Double totalAiRemettre) {
+        this(vendeurId, vendeurNom, nombreVentes, totalVentesEspeces, totalVentesCredit, totalReglementsCreditEspeces,
+                totalAiRemettre, 0.0, 0.0);
+    }
 }

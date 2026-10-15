@@ -1,5 +1,6 @@
 package com.ges.boutique.fournisseur;
 
+import com.ges.boutique.securite.UtilisateurConnecte;
 import com.ges.boutique.produit.Produit;
 import com.ges.boutique.produit.ProduitRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -302,7 +303,7 @@ public class FournisseurAchatController {
     public ResponseEntity<Map<String, Object>> annulerAchat(
             @PathVariable Long achatId,
             @RequestParam(required = false) Long utilisateurId) {
-        AchatFournisseur achat = fournisseurComptableService.annulerAchat(achatId, utilisateurId);
+        AchatFournisseur achat = fournisseurComptableService.annulerAchat(achatId, UtilisateurConnecte.idOu(utilisateurId));
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "Achat annulé, stock corrigé");
@@ -326,7 +327,7 @@ public class FournisseurAchatController {
     public ResponseEntity<?> annulerPaiement(
             @PathVariable Long paiementId,
             @RequestParam Long utilisateurId) {
-        return ResponseEntity.ok(fournisseurComptableService.annulerPaiementFournisseur(paiementId, utilisateurId));
+        return ResponseEntity.ok(fournisseurComptableService.annulerPaiementFournisseur(paiementId, UtilisateurConnecte.idOu(utilisateurId)));
     }
 
     @GetMapping("/produits-simples")
