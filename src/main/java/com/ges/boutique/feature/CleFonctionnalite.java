@@ -30,7 +30,8 @@ public enum CleFonctionnalite {
     POINTAGE("Pointage des employés (code QR)"),
     OFFRES_QUANTITE("Offres par quantité (ex : 2 pour 75 F)"),
     CLIENTS_ABSENTS("Clients qui ne viennent plus"),
-    PLANNING("Planning de l'équipe");
+    PLANNING("Planning de l'équipe"),
+    MODE_ENTRAINEMENT("Mode entraînement des vendeurs");
 
     private final String libelle;
 
