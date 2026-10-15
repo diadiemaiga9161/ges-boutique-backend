@@ -31,7 +31,8 @@ public enum CleFonctionnalite {
     OFFRES_QUANTITE("Offres par quantité (ex : 2 pour 75 F)"),
     CLIENTS_ABSENTS("Clients qui ne viennent plus"),
     PLANNING("Planning de l'équipe"),
-    MODE_ENTRAINEMENT("Mode entraînement des vendeurs");
+    MODE_ENTRAINEMENT("Mode entraînement des vendeurs"),
+    DEVIS("Devis (pro forma) pour écoles, mairies, ONG");
 
     private final String libelle;
 
