@@ -85,6 +85,11 @@ public class RetourVenteServiceImpl {
                 throw new IllegalArgumentException("Quantité invalide pour: " + produit.getNom());
             }
 
+            // Ligne vendue retrouvée côté serveur : l'identifiant envoyé par l'appli n'est
+            // gardé que s'il appartient vraiment à cette vente et à ce produit.
+            LigneVente ligneVendue = ligneVendue(vente, produit.getId(), ligneReq.getLigneVenteId(), true);
+            ligneReq.setLigneVenteId(ligneVendue != null ? ligneVendue.getId() : null);
+
             LigneRetourVente ligne = new LigneRetourVente();
             ligne.setRetour(retour);
             ligne.setProduit(produit);
@@ -113,7 +118,9 @@ public class RetourVenteServiceImpl {
                     produit.getNom(), ligneReq.getQuantiteRetournee(), ligne.getSousTotal());
 
             String motifRetourStock = "Retour vente " + vente.getNumeroVente() + " - " + produit.getNom();
-            inventaireService.retourStock(produit.getId(), ligneReq.getQuantiteRetournee(), request.getUtilisateurId(), motifRetourStock);
+            // Stock remis en unités de stock : 1 carton de 24 rendu = 24 pièces (comme à la vente).
+            inventaireService.retourStock(produit.getId(), ligneReq.getQuantiteRetournee() * facteurStock(ligneVendue),
+                    request.getUtilisateurId(), motifRetourStock);
 
             if (ligneOffre == null) {
                 totalBeneficeRetourne += calculerBeneficeRetourneLigne(ligneReq, produit);
@@ -238,42 +245,85 @@ public class RetourVenteServiceImpl {
      * déjà été rendu (retours précédents + lignes de cette même demande).
      */
     private void verifierQuantitesRendables(Vente vente, RetourVenteRequest request) {
+        // Tout est compté en unités de stock (pièces) : une ligne vendue « au carton »
+        // (niveauFacteur 24) compte pour 24 par carton, vendu comme rendu.
         Map<Long, Integer> vendu = new HashMap<>();
         Map<Long, String> noms = new HashMap<>();
+        Map<Long, java.util.Set<Integer>> facteurs = new HashMap<>();
         if (vente.getLignes() != null) {
             for (LigneVente l : vente.getLignes()) {
                 if (l.getProduit() == null || l.getProduit().getId() == null) continue;
-                vendu.merge(l.getProduit().getId(), l.getQuantite() != null ? l.getQuantite() : 0, Integer::sum);
-                noms.putIfAbsent(l.getProduit().getId(), l.getProduit().getNom());
+                Long id = l.getProduit().getId();
+                vendu.merge(id, (l.getQuantite() != null ? l.getQuantite() : 0) * facteurStock(l), Integer::sum);
+                noms.putIfAbsent(id, l.getProduit().getNom());
+                facteurs.computeIfAbsent(id, k -> new java.util.HashSet<>()).add(facteurStock(l));
             }
         }
         Map<Long, Integer> dejaRendu = new HashMap<>();
         for (RetourVente r : retourVenteRepository.findByVenteIdOrderByDateRetourDesc(vente.getId())) {
             for (LigneRetourVente lr : r.getLignes()) {
                 if (lr.getProduit() == null) continue;
-                dejaRendu.merge(lr.getProduit().getId(), lr.getQuantiteRetournee() != null ? lr.getQuantiteRetournee() : 0, Integer::sum);
+                LigneVente lv = ligneVendue(vente, lr.getProduit().getId(), lr.getLigneVenteId(), false);
+                int f = lv != null ? facteurStock(lv) : 1;
+                dejaRendu.merge(lr.getProduit().getId(), (lr.getQuantiteRetournee() != null ? lr.getQuantiteRetournee() : 0) * f, Integer::sum);
             }
         }
         Map<Long, Integer> demande = new HashMap<>();
         for (RetourVenteRequest.LigneRetourVenteRequest l : request.getLignes()) {
             if (l.getProduitId() == null || l.getQuantiteRetournee() == null) continue;
-            demande.merge(l.getProduitId(), l.getQuantiteRetournee(), Integer::sum);
+            if (!vendu.containsKey(l.getProduitId())) {
+                throw new IllegalArgumentException("Ce produit ne fait pas partie de la vente " + vente.getNumeroVente() + ".");
+            }
+            LigneVente lv = ligneVendue(vente, l.getProduitId(), l.getLigneVenteId(), true);
+            demande.merge(l.getProduitId(), l.getQuantiteRetournee() * facteurStock(lv), Integer::sum);
         }
         for (Map.Entry<Long, Integer> e : demande.entrySet()) {
             Long produitId = e.getKey();
-            Integer v = vendu.get(produitId);
-            if (v == null) {
-                throw new IllegalArgumentException("Ce produit ne fait pas partie de la vente " + vente.getNumeroVente() + ".");
-            }
+            int v = vendu.get(produitId);
             int rendu = dejaRendu.getOrDefault(produitId, 0);
             int reste = Math.max(0, v - rendu);
             if (e.getValue() > reste) {
                 String nom = noms.getOrDefault(produitId, "ce produit");
+                // Messages dans l'unité de la vente quand elle est unique (ex: cartons), sinon en pièces.
+                java.util.Set<Integer> fs = facteurs.getOrDefault(produitId, java.util.Set.of(1));
+                int f = fs.size() == 1 ? fs.iterator().next() : 1;
+                String unite = f > 1 ? " (en cartons/lots)" : (fs.size() > 1 ? " (en pièces)" : "");
                 throw new IllegalArgumentException(reste == 0
-                        ? "« " + nom + " » a déjà été entièrement rendu (" + rendu + " sur " + v + " vendus)."
-                        : "« " + nom + " » : " + rendu + " déjà rendu(s) sur " + v + " vendu(s), vous pouvez encore en rendre " + reste + ".");
+                        ? "« " + nom + " » a déjà été entièrement rendu (" + rendu / f + " sur " + v / f + " vendus" + unite + ")."
+                        : "« " + nom + " » : " + rendu / f + " déjà rendu(s) sur " + v / f + " vendu(s)" + unite
+                            + ", vous pouvez encore en rendre " + reste / f + ".");
             }
         }
+    }
+
+    /** Pièces de stock par unité vendue sur cette ligne (1 carton de 24 = 24 ; 1 sinon). */
+    private static int facteurStock(LigneVente l) {
+        return l != null && l.getNiveauFacteur() != null && l.getNiveauFacteur() > 1 ? l.getNiveauFacteur() : 1;
+    }
+
+    /**
+     * Ligne de la vente à laquelle se rapporte un retour : celle indiquée par l'appli si elle
+     * appartient bien à cette vente et à ce produit, sinon la seule ligne de ce produit (ou
+     * plusieurs lignes vendues dans la même unité). Si le produit a été vendu dans des unités
+     * différentes (carton ET pièce) sans que l'appli précise la ligne, on ne devine pas.
+     */
+    private LigneVente ligneVendue(Vente vente, Long produitId, Long ligneVenteId, boolean refuserSiAmbigu) {
+        if (vente.getLignes() == null || produitId == null) return null;
+        List<LigneVente> duProduit = vente.getLignes().stream()
+                .filter(l -> l.getProduit() != null && produitId.equals(l.getProduit().getId()))
+                .toList();
+        if (ligneVenteId != null) {
+            for (LigneVente l : duProduit) {
+                if (ligneVenteId.equals(l.getId())) return l;
+            }
+        }
+        if (duProduit.isEmpty()) return null;
+        long unites = duProduit.stream().map(RetourVenteServiceImpl::facteurStock).distinct().count();
+        if (unites > 1 && refuserSiAmbigu) {
+            throw new IllegalArgumentException("« " + duProduit.get(0).getProduit().getNom()
+                    + " » a été vendu en plusieurs unités (carton et pièce) : mettez l'application à jour puis refaites le retour.");
+        }
+        return duProduit.get(0);
     }
 
     /** Ligne de la vente concernée si elle a été vendue avec une offre par quantité, sinon null. */

@@ -140,20 +140,63 @@ public class InventaireServiceImpl implements InventaireService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Aucun niveau racine (produit principal) trouvé pour le produit " + produit.getNom()));
 
-        int stockAvant = niveauPrincipal.getStock() != null ? niveauPrincipal.getStock() : 0;
-        int stockApres = stockAvant + delta;
-        if (stockApres < 0) {
-            throw new StockInsuffisantException("Stock insuffisant au niveau " + niveauPrincipal.getNom() +
-                    " pour " + produit.getNom() + ". Disponible: " + stockAvant + ", demandé: " + (-delta));
-        }
-        niveauPrincipal.setStock(stockApres);
-        produitNiveauRepository.save(niveauPrincipal);
+        // `delta` est en unités de base (pièces, comme Produit.quantite). On le range en unités
+        // du niveau racine quand il en fait un compte rond (ex: 24 pièces = 1 carton), et le
+        // reste au niveau le plus petit : avant, les pièces étaient ajoutées telles quelles au
+        // niveau racine (24 pièces rendues devenaient 24 cartons) dès qu'il y avait 2 niveaux.
+        // Un seul niveau : facteur 1, tout va au niveau racine, comme avant.
+        long parRacine = facteurVersBase(niveauPrincipal, niveaux, new HashSet<>());
+        ProduitNiveau feuille = parRacine == 1 ? niveauPrincipal : niveaux.stream()
+                .filter(n -> niveaux.stream().noneMatch(m -> n.getId().equals(m.getParentId())))
+                .findFirst().orElse(niveauPrincipal);
+        int racine = niveauPrincipal.getStock() != null ? niveauPrincipal.getStock() : 0;
+        int petit = feuille.getStock() != null ? feuille.getStock() : 0;
+        int principal = produit.getQuantitePrincipale() != null ? produit.getQuantitePrincipale() : 0;
+        int parPrincipal = niveauPrincipal.getFacteur() != null && niveauPrincipal.getFacteur() > 0 ? niveauPrincipal.getFacteur() : 1;
+        int stockAvant = racine;
 
+        int deltaRacine = (int) (delta / parRacine);
+        int deltaPetit = (int) (delta % parRacine);
+        if (feuille == niveauPrincipal) {
+            racine += deltaRacine + deltaPetit;
+        } else {
+            racine += deltaRacine;
+            petit += deltaPetit;
+            // Pièces manquantes au plus petit niveau : on ouvre une unité du niveau racine.
+            while (petit < 0 && racine > 0) {
+                racine--;
+                petit += (int) parRacine;
+            }
+        }
+        // Unités racine manquantes : on ouvre le stock principal fermé (même logique que la vente).
+        while (racine < 0 && principal > 0) {
+            principal--;
+            racine += parPrincipal;
+        }
+        if (racine < 0 || petit < 0) {
+            throw new StockInsuffisantException("Stock insuffisant pour " + produit.getNom()
+                    + ". Disponible: " + produit.getQuantite() + ", demandé: " + (-delta));
+        }
+        niveauPrincipal.setStock(racine);
+        produitNiveauRepository.save(niveauPrincipal);
+        if (feuille != niveauPrincipal) {
+            feuille.setStock(petit);
+            produitNiveauRepository.save(feuille);
+        }
+        if (produit.getQuantitePrincipale() != null || principal != 0) {
+            produit.setQuantitePrincipale(principal);
+        }
+        log.debug("Niveaux {} : racine {} -> {}, delta {}", produit.getNom(), stockAvant, racine, delta);
+
+        // Total affiché = tous les niveaux en pièces + le stock principal encore fermé
+        // (même calcul que VenteServiceImpl.syncProduitQuantite) : avant, le stock fermé
+        // était oublié et le total chutait après un retour, un achat ou un ajustement.
         List<ProduitNiveau> niveauxMaj = produitNiveauRepository.findByProduitIdOrderByOrdreAsc(produit.getId());
-        int nouvelleQuantiteProduit = (int) niveauxMaj.stream()
+        long total = niveauxMaj.stream()
                 .mapToLong(n -> (n.getStock() != null ? n.getStock() : 0L) * facteurVersBase(n, niveauxMaj, new HashSet<>()))
                 .sum();
-        produit.setQuantite(nouvelleQuantiteProduit);
+        total += (long) principal * parPrincipal * parRacine;
+        produit.setQuantite((int) total);
 
         return niveauPrincipal;
     }
