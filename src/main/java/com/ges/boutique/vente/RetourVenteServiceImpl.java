@@ -119,7 +119,7 @@ public class RetourVenteServiceImpl {
 
             String motifRetourStock = "Retour vente " + vente.getNumeroVente() + " - " + produit.getNom();
             // Stock remis en unités de stock : 1 carton de 24 rendu = 24 pièces (comme à la vente).
-            inventaireService.retourStock(produit.getId(), ligneReq.getQuantiteRetournee() * facteurStock(ligneVendue),
+            inventaireService.retourStock(produit.getId(), Math.multiplyExact(ligneReq.getQuantiteRetournee(), facteurStock(ligneVendue)),
                     request.getUtilisateurId(), motifRetourStock);
 
             if (ligneOffre == null) {
@@ -274,8 +274,13 @@ public class RetourVenteServiceImpl {
             if (!vendu.containsKey(l.getProduitId())) {
                 throw new IllegalArgumentException("Ce produit ne fait pas partie de la vente " + vente.getNumeroVente() + ".");
             }
+            if (l.getQuantiteRetournee() <= 0 || l.getQuantiteRetournee() > vendu.get(l.getProduitId())) {
+                throw new IllegalArgumentException("Quantité retournée invalide pour « "
+                        + noms.getOrDefault(l.getProduitId(), "ce produit") + " ».");
+            }
             LigneVente lv = ligneVendue(vente, l.getProduitId(), l.getLigneVenteId(), true);
-            demande.merge(l.getProduitId(), l.getQuantiteRetournee() * facteurStock(lv), Integer::sum);
+            // multiplyExact / addExact : une quantité démesurée est refusée au lieu de déborder.
+            demande.merge(l.getProduitId(), Math.multiplyExact(l.getQuantiteRetournee(), facteurStock(lv)), Math::addExact);
         }
         for (Map.Entry<Long, Integer> e : demande.entrySet()) {
             Long produitId = e.getKey();
