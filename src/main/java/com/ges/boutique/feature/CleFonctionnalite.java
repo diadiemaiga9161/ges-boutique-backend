@@ -28,7 +28,8 @@ public enum CleFonctionnalite {
     PRIMES_PRODUITS("Primes sur produits (vendeurs)"),
     VENTE_A_LA_MESURE("Vente au poids / au litre / au mètre"),
     POINTAGE("Pointage des employés (code QR)"),
-    OFFRES_QUANTITE("Offres par quantité (ex : 2 pour 75 F)");
+    OFFRES_QUANTITE("Offres par quantité (ex : 2 pour 75 F)"),
+    CLIENTS_ABSENTS("Clients qui ne viennent plus");
 
     private final String libelle;
 

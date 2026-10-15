@@ -139,6 +139,7 @@ public class NotificationPersistanceService {
         if (type.startsWith("TRANSFERT")) return "/mobile/tabs/transferts";
         if (type.startsWith("VENTE")) return "/mobile/tabs/sales";
         if (type.startsWith("RESUME")) return "/mobile/tabs/caisse";
+        if (type.startsWith("CLIENTS_ABSENTS")) return "/mobile/clients-absents";
         return "/mobile/tabs/notifications";
     }
 }
