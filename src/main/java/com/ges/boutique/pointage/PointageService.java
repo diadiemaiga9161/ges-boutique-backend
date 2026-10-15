@@ -3,6 +3,8 @@ package com.ges.boutique.pointage;
 import com.ges.boutique.employe.Employe;
 import com.ges.boutique.employe.EmployeRepository;
 import com.ges.boutique.employe.StatutEmploye;
+import com.ges.boutique.planning.CreneauPlanning;
+import com.ges.boutique.planning.PlanningService;
 import com.ges.boutique.utilisateur.Utilisateur;
 import com.ges.boutique.utilisateur.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class PointageService {
     private final ParametrePointageRepository parametreRepository;
     private final EmployeRepository employeRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final PlanningService planningService;
 
     // ================================================================= réglages
 
@@ -172,7 +175,7 @@ public class PointageService {
             } catch (DataIntegrityViolationException doublon) {
                 throw new IllegalStateException("Arrivée déjà enregistrée. Réessayez dans un instant.");
             }
-            int retard = retardMinutes(heure, reglage());
+            int retard = retardMinutes(heure, reglage(), planningService.creneau(e.getId(), jour));
             res.put("action", "ARRIVEE");
             res.put("message", "Arrivée enregistrée à " + heure.format(HEURE)
                     + (retard > 0 ? " (" + dureeLisible(retard) + " de retard)" : "") + ".");
@@ -193,7 +196,8 @@ public class PointageService {
                 res.put("message", (miseAJour ? "Départ mis à jour : " : "Départ enregistré à ") + heure.format(HEURE) + ".");
             }
         }
-        res.put("aujourdhui", ligne(e, pointageRepository.findByEmployeIdAndDatePointage(e.getId(), jour).orElse(null), reglage(), true));
+        res.put("aujourdhui", ligne(e, pointageRepository.findByEmployeIdAndDatePointage(e.getId(), jour).orElse(null), reglage(), true,
+                planningService.creneau(e.getId(), jour)));
         return res;
     }
 
@@ -209,13 +213,19 @@ public class PointageService {
         LocalDate aujourdhui = LocalDate.now(ZONE);
         res.put("relie", true);
         res.put("employe", nomComplet(e));
-        res.put("aujourdhui", ligne(e, pointageRepository.findByEmployeIdAndDatePointage(e.getId(), aujourdhui).orElse(null), reglage, true));
+        Map<LocalDate, CreneauPlanning> planning = planningService
+                .creneaux(mois.atDay(1).isBefore(aujourdhui) ? mois.atDay(1) : aujourdhui,
+                        mois.atEndOfMonth().isAfter(aujourdhui) ? mois.atEndOfMonth() : aujourdhui)
+                .getOrDefault(e.getId(), Map.of());
+        res.put("aujourdhui", ligne(e, pointageRepository.findByEmployeIdAndDatePointage(e.getId(), aujourdhui).orElse(null), reglage, true,
+                planning.get(aujourdhui)));
         res.put("mois", mois.toString());
         res.put("jours", pointageRepository
                 .findByEmployeIdAndDatePointageBetweenOrderByDatePointageDesc(e.getId(), mois.atDay(1), mois.atEndOfMonth())
-                .stream().map(p -> ligne(e, p, reglage, true)).toList());
+                .stream().map(p -> ligne(e, p, reglage, true, planning.get(p.getDatePointage()))).toList());
         res.put("resume", resumeEmploye(e, mois, reglage,
-                pointageRepository.findByEmployeIdAndDatePointageBetweenOrderByDatePointageDesc(e.getId(), mois.atDay(1), mois.atEndOfMonth())));
+                pointageRepository.findByEmployeIdAndDatePointageBetweenOrderByDatePointageDesc(e.getId(), mois.atDay(1), mois.atEndOfMonth()),
+                planning));
         return res;
     }
 
@@ -240,11 +250,13 @@ public class PointageService {
         Map<Long, Pointage> parEmploye = pointageRepository.findByDatePointage(date).stream()
                 .collect(Collectors.toMap(Pointage::getEmployeId, Function.identity(), (a, b) -> a));
         Set<Long> avecCompte = employesAvecCompte();
+        Map<Long, Map<LocalDate, CreneauPlanning>> planning = planningService.creneaux(date, date);
         List<Map<String, Object>> lignes = new ArrayList<>();
         for (Employe e : employeRepository.findAllByOrderByNomAsc()) {
             Pointage p = parEmploye.get(e.getId());
             if (p == null && (e.getStatut() != StatutEmploye.ACTIF || avantEmbauche(e, date))) continue;
-            Map<String, Object> l = ligne(e, p, reglage, date.equals(LocalDate.now(ZONE)));
+            Map<String, Object> l = ligne(e, p, reglage, date.equals(LocalDate.now(ZONE)),
+                    planning.getOrDefault(e.getId(), Map.of()).get(date));
             l.put("aCompte", avecCompte.contains(e.getId()));
             lignes.add(l);
         }
@@ -296,7 +308,7 @@ public class PointageService {
         p.setSaisiPar(gerant.getNomComplet());
         p.setDateModification(LocalDateTime.now(ZONE));
         pointageRepository.save(p);
-        return ligne(e, p, reglage(), date.equals(LocalDate.now(ZONE)));
+        return ligne(e, p, reglage(), date.equals(LocalDate.now(ZONE)), planningService.creneau(employeId, date));
     }
 
     @Transactional
@@ -311,11 +323,12 @@ public class PointageService {
         Map<Long, List<Pointage>> parEmploye = pointageRepository
                 .findByDatePointageBetween(mois.atDay(1), mois.atEndOfMonth()).stream()
                 .collect(Collectors.groupingBy(Pointage::getEmployeId));
+        Map<Long, Map<LocalDate, CreneauPlanning>> planning = planningService.creneaux(mois.atDay(1), mois.atEndOfMonth());
         List<Map<String, Object>> lignes = new ArrayList<>();
         for (Employe e : employeRepository.findAllByOrderByNomAsc()) {
             List<Pointage> liste = parEmploye.getOrDefault(e.getId(), List.of());
             if (liste.isEmpty() && e.getStatut() != StatutEmploye.ACTIF) continue;
-            lignes.add(resumeEmploye(e, mois, reglage, liste));
+            lignes.add(resumeEmploye(e, mois, reglage, liste, planning.getOrDefault(e.getId(), Map.of())));
         }
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("mois", mois.toString());
@@ -326,12 +339,13 @@ public class PointageService {
 
     // ================================================================= calculs
 
-    private Map<String, Object> resumeEmploye(Employe e, YearMonth mois, ParametrePointage reglage, List<Pointage> liste) {
+    private Map<String, Object> resumeEmploye(Employe e, YearMonth mois, ParametrePointage reglage, List<Pointage> liste,
+                                              Map<LocalDate, CreneauPlanning> planning) {
         int retards = 0;
         long minutesRetard = 0;
         long minutesTravail = 0;
         for (Pointage p : liste) {
-            int r = retardMinutes(p.getHeureArrivee(), reglage);
+            int r = retardMinutes(p.getHeureArrivee(), reglage, planning.get(p.getDatePointage()));
             if (r > 0) { retards++; minutesRetard += r; }
             if (p.getHeureDepart() != null) minutesTravail += Duration.between(p.getHeureArrivee(), p.getHeureDepart()).toMinutes();
         }
@@ -344,7 +358,7 @@ public class PointageService {
         int absences = 0;
         if (e.getStatut() == StatutEmploye.ACTIF) {
             for (LocalDate d = debut; !d.isAfter(fin); d = d.plusDays(1)) {
-                if (!estJourRepos(d, reglage) && !joursPointes.contains(d)) absences++;
+                if (!estRepos(d, reglage, planning.get(d)) && !joursPointes.contains(d)) absences++;
             }
         }
         Map<String, Object> m = new LinkedHashMap<>();
@@ -359,7 +373,8 @@ public class PointageService {
         return m;
     }
 
-    private Map<String, Object> ligne(Employe e, Pointage p, ParametrePointage reglage, boolean estAujourdhui) {
+    private Map<String, Object> ligne(Employe e, Pointage p, ParametrePointage reglage, boolean estAujourdhui,
+                                      CreneauPlanning creneau) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("employeId", e.getId());
         m.put("nom", nomComplet(e));
@@ -372,21 +387,32 @@ public class PointageService {
         m.put("methodeDepart", p == null ? null : p.getMethodeDepart());
         m.put("saisiPar", p == null ? null : p.getSaisiPar());
         m.put("observation", p == null ? null : p.getObservation());
-        m.put("retardMinutes", p == null ? 0 : retardMinutes(p.getHeureArrivee(), reglage));
+        m.put("retardMinutes", p == null ? 0 : retardMinutes(p.getHeureArrivee(), reglage, creneau));
+        m.put("horaire", creneau == null ? null : Boolean.TRUE.equals(creneau.getRepos()) ? "Repos"
+                : creneau.getHeureDebut() == null ? null : creneau.getHeureDebut().format(HEURE) + " – " + creneau.getHeureFin().format(HEURE));
         m.put("minutesTravail", p == null || p.getHeureDepart() == null ? null
                 : Duration.between(p.getHeureArrivee(), p.getHeureDepart()).toMinutes());
         String statut;
-        if (p == null) statut = estAujourdhui ? "PAS_ENCORE" : "ABSENT";
+        if (p == null && creneau != null && Boolean.TRUE.equals(creneau.getRepos())) statut = "REPOS";
+        else if (p == null) statut = estAujourdhui ? "PAS_ENCORE" : "ABSENT";
         else if (p.getHeureDepart() != null) statut = "PARTI";
         else statut = "PRESENT";
         m.put("statut", statut);
         return m;
     }
 
-    static int retardMinutes(LocalTime arrivee, ParametrePointage reglage) {
-        LocalTime prevue = reglage.getHeureArriveePrevue();
+    /** Retard par rapport à l'heure de début du planning du jour, sinon l'heure prévue des réglages. */
+    static int retardMinutes(LocalTime arrivee, ParametrePointage reglage, CreneauPlanning creneau) {
+        LocalTime prevue = creneau != null && !Boolean.TRUE.equals(creneau.getRepos()) && creneau.getHeureDebut() != null
+                ? creneau.getHeureDebut() : reglage.getHeureArriveePrevue();
         long minutes = Duration.between(prevue, arrivee).toMinutes();
         return minutes > reglage.getToleranceMinutes() ? (int) minutes : 0;
+    }
+
+    /** Jour de repos : celui du planning de l'employé s'il est rempli ce jour-là, sinon le repos des réglages. */
+    private static boolean estRepos(LocalDate d, ParametrePointage reglage, CreneauPlanning creneau) {
+        if (creneau != null) return Boolean.TRUE.equals(creneau.getRepos());
+        return estJourRepos(d, reglage);
     }
 
     private static boolean estJourRepos(LocalDate d, ParametrePointage reglage) {

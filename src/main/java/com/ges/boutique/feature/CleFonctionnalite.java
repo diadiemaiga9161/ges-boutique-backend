@@ -29,7 +29,8 @@ public enum CleFonctionnalite {
     VENTE_A_LA_MESURE("Vente au poids / au litre / au mètre"),
     POINTAGE("Pointage des employés (code QR)"),
     OFFRES_QUANTITE("Offres par quantité (ex : 2 pour 75 F)"),
-    CLIENTS_ABSENTS("Clients qui ne viennent plus");
+    CLIENTS_ABSENTS("Clients qui ne viennent plus"),
+    PLANNING("Planning de l'équipe");
 
     private final String libelle;
 
