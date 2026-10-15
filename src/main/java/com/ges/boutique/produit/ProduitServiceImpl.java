@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 public class ProduitServiceImpl implements ProduitService {
 
     private final ProduitRepository produitRepository;
+    private final com.ges.boutique.offre.OffreQuantiteRepository offreQuantiteRepository;
     private final CategorieRepository categorieRepository;
     private final FournisseurRepository fournisseurRepository;
     private final ExcelImportService excelImportService;
@@ -261,6 +262,9 @@ public class ProduitServiceImpl implements ProduitService {
         notificationService.notifierMiseAJourDashboard();
         // Photo éventuelle (fonctionnalité IMAGES_PRODUITS) : supprimée avec le produit.
         produitImageRepository.deleteByProduitId(id);
+        // Offres par quantité du produit : supprimées avec lui (sinon « Produit supprimé » dans
+        // la liste du gérant, et l'offre ne s'applique à aucun produit).
+        offreQuantiteRepository.deleteByProduitId(id);
         produitRepository.delete(produit);
     }
 

@@ -10,4 +10,7 @@ public interface OffreQuantiteRepository extends JpaRepository<OffreQuantite, Lo
     List<OffreQuantite> findByProduitIdAndActiveTrue(Long produitId);
     List<OffreQuantite> findByActiveTrue();
     List<OffreQuantite> findAllByOrderByProduitIdAscQuantiteAsc();
+
+    /** Offres d'un produit supprimé : supprimées avec lui (sinon elles restent orphelines). */
+    void deleteByProduitId(Long produitId);
 }
