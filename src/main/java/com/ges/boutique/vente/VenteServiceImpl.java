@@ -624,9 +624,15 @@ public class VenteServiceImpl implements VenteService {
         LocalDate dateReglement = request.getDateReglement() != null ? request.getDateReglement() : LocalDate.now();
         String modePaiement = request.getModePaiement() != null ? request.getModePaiement() : "ESPECES";
 
+        // reglementCredit met déjà à jour montantVerse / montantRestant / creditRegle de cette même
+        // vente (même transaction, même objet). Rappeler vente.enregistrerReglement() ici comptait
+        // le versement une seconde fois : 300 F payés sur 1 000 F affichaient « reste 400 F ».
         caisseService.reglementCredit(venteId, request.getMontantRegle(), request.getUtilisateurId(), modePaiement, request.getReferencePaiement(), null, null);
 
-        vente.enregistrerReglement(request.getMontantRegle(), dateReglement);
+        // Date de règlement choisie par l'utilisateur (reglementCredit met la date du jour).
+        if (Boolean.TRUE.equals(vente.getCreditRegle())) {
+            vente.setDateReglement(dateReglement);
+        }
 
         // Traçabilité : qui a réglé le crédit
         if (request.getUtilisateurId() != null) {

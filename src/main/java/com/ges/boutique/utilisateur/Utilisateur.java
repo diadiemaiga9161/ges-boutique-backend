@@ -1,5 +1,6 @@
 package com.ges.boutique.utilisateur;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,6 +27,9 @@ public class Utilisateur implements UserDetails {
     @Column(nullable = false, unique = true)
     private String username;
 
+    // Lu à la création/modification d'un compte, jamais renvoyé dans les réponses JSON
+    // (sinon le hash BCrypt partait avec chaque /api/utilisateurs et /api/auth/profil).
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = false)
     private String password;
 
